@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmology Projects</title>
+
+    <!-- Fonts: Basis Grotesque Pro with DM Sans as visual fallback -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+
+    <!-- Three.js for WebGL black hole -->
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+
+    <style>
+        /* ── Reset ────────────────────────────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        /* ── Design system ───────────────────────────────────────────────── */
+        :root {
+            /* Colours */
+            --white: #fff;
+            --black: #000;
+            --purple: #584dff;
+            --dark-purple: #100037;
+            --bg: #000;
+            --bg-subtle: #171717;
+            --bg-invert: #fff;
+            --bg-highlight: #584dff;
+            --fg: #fff;
+            --text-bold: #fff;
+            --text-regular: #cac5ca;
+            --text-subtle: #79767a;
+            --text-error: #ff6060;
+            --border-bold: #fff;
+            --border-subtle: #313033;
+            --border-highlight: #584dff;
+            --button-bg: hsla(0,0%,73%,.2);
+            --neutral-10: #1c1b1e;
+            --neutral-20: #313033;
+            --neutral-30: #48464a;
+            --neutral-40: #605d62;
+            --neutral-50: #79767a;
+            --neutral-60: #938f94;
+            --neutral-70: #aeaaae;
+            --neutral-80: #cac5ca;
+
+            /* Spacing */
+            --gutter-xs: 0.8rem;
+            --gutter-sm: 1.6rem;
+            --gutter: 2.4rem;
+            --vertical-gutter: 18rem;
+
+            /* Shape */
+            --border-radius: 0.8rem;
+            --border-radius-lg: 1.6rem;
+
+            /* Buttons */
+            --button-padding: 1.6rem;
+            --button-height: 2.4rem;
+            --button-height-md: 3.2rem;
+            --button-height-lg: 3.6rem;
+        }
+
+        /* ── Base ────────────────────────────────────────────────────────── */
+        html {
+            font-size: 62.5%; /* 1rem = 10px */
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Basis Grotesque Pro', 'DM Sans', sans-serif;
+            font-size: 1.6rem;
+            line-height: 1.6;
+            background-color: var(--bg);
+            color: var(--text-bold);
+            -webkit-font-smoothing: antialiased;
+            scrollbar-width: none;
+            overflow-x: hidden;
+        }
+
+        body::-webkit-scrollbar { display: none; }
+        a { color: inherit; text-decoration: none; }
+
+        /* ── Navigation ──────────────────────────────────────────────────── */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 2.4rem var(--gutter);
+            /* Fades in after a small delay so it doesn't flash over the hero intro */
+        }
+
+        .nav-logo {
+            font-size: 1.4rem;
+            font-weight: 400;
+            letter-spacing: 0.04em;
+            color: var(--text-regular);
+            transition: color 0.2s;
+        }
+        .nav-logo:hover { color: var(--text-bold); }
+
+        .nav-links {
+            display: flex;
+            gap: 3.2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            font-size: 1.3rem;
+            font-weight: 400;
+            color: var(--text-subtle);
+            letter-spacing: 0.02em;
+            transition: color 0.2s;
+        }
+        .nav-links a:hover { color: var(--text-bold); }
+
+        /* ── Hero ────────────────────────────────────────────────────────── */
+        #hero {
+            position: relative;
+            width: 100%;
+            /* Tall enough to drive the scroll-based camera approach */
+            height: 300vh;
+        }
+
+        /* Canvas fills the viewport and stays fixed while scrolling through hero */
+        #bh-canvas {
+            position: sticky;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            display: block;
+            background: var(--bg);
+        }
+
+        /* Text overlay inside the sticky hero */
+        .hero-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 0 var(--gutter) 6.4rem;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .hero-label {
+            font-size: 1.2rem;
+            font-weight: 400;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-subtle);
+            margin-bottom: 2rem;
+        }
+
+        .hero-title {
+            font-size: clamp(5rem, 7.5vw, 11rem);
+            font-weight: 300;
+            line-height: 1.0;
+            letter-spacing: -0.02em;
+            color: var(--text-bold);
+            max-width: 80rem;
+        }
+
+        .hero-title em {
+            font-style: italic;
+            color: var(--text-regular);
+        }
+
+        /* ── Section shared ──────────────────────────────────────────────── */
+        .section {
+            position: relative;
+            z-index: 10;
+            background: var(--bg);
+            padding: var(--vertical-gutter) var(--gutter);
+        }
+
+        .section-label {
+            font-size: 1.1rem;
+            font-weight: 400;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-subtle);
+            margin-bottom: 2.4rem;
+        }
+
+        .section-title {
+            font-size: clamp(2.8rem, 3.5vw, 4.8rem);
+            font-weight: 300;
+            line-height: 1.15;
+            letter-spacing: -0.01em;
+            color: var(--text-bold);
+            max-width: 72rem;
+            margin-bottom: 4rem;
+        }
+
+        /* ── Simulation section ──────────────────────────────────────────── */
+        #simulations .sim-description {
+            font-size: 1.6rem;
+            color: var(--text-regular);
+            max-width: 64rem;
+            line-height: 1.7;
+            margin-bottom: 6.4rem;
+        }
+
+        .sim-frame-wrapper {
+            width: 100%;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--border-radius-lg);
+            overflow: hidden;
+            background: var(--bg-subtle);
+        }
+
+        .sim-frame-wrapper iframe {
+            width: 100%;
+            height: 87.75vh;
+            border: none;
+            display: block;
+        }
+
+        /* ── About section ───────────────────────────────────────────────── */
+        #about .about-grid {
+            display: grid;
+            grid-template-columns: minmax(160px, 260px) 1fr minmax(180px, 230px);
+            gap: 6rem;
+            align-items: start;
+        }
+
+        @media (max-width: 900px) {
+            #about .about-grid { grid-template-columns: minmax(160px, 260px) 1fr; gap: 4rem; }
+            .thesis-preview { display: none; }
+        }
+        @media (max-width: 768px) {
+            #about .about-grid { grid-template-columns: 1fr; gap: 4rem; }
+        }
+
+        .about-portrait {
+            width: 100%;
+            aspect-ratio: 3 / 4;
+            object-fit: cover;
+            object-position: 75% 50%;   /* shift visible frame 25% to the right */
+            border-radius: var(--border-radius-lg);
+            border: 1px solid var(--border-subtle);
+        }
+
+        /* ── Thesis PDF preview ──────────────────────────────────────────── */
+        .thesis-preview {
+            display: block;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--border-radius-lg);
+            overflow: hidden;
+            cursor: pointer;
+            text-decoration: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            transform: translateX(-55%);
+        }
+        .thesis-preview:hover {
+            border-color: var(--purple);
+            box-shadow: 0 0 0 1px var(--purple);
+        }
+        .thesis-iframe {
+            width: 100%;
+            height: 300px;
+            border: none;
+            pointer-events: none;
+            display: block;
+            background: var(--bg-subtle);
+        }
+        .thesis-caption {
+            padding: 1.2rem 1.6rem;
+            background: var(--bg-subtle);
+            border-top: 1px solid var(--border-subtle);
+        }
+        .thesis-caption strong {
+            display: block;
+            font-size: 1.3rem;
+            font-weight: 500;
+            color: var(--text-regular);
+            margin-bottom: 0.2rem;
+        }
+        .thesis-caption span {
+            font-size: 1.1rem;
+            color: var(--text-subtle);
+        }
+
+        .about-name {
+            font-size: clamp(3rem, 4vw, 5.6rem);
+            font-weight: 300;
+            letter-spacing: -0.02em;
+            color: var(--text-bold);
+            margin-bottom: 1.6rem;
+            line-height: 1.1;
+        }
+
+        .about-role {
+            font-size: 1.4rem;
+            font-weight: 400;
+            color: var(--purple);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            margin-bottom: 3.2rem;
+        }
+
+        .about-bio {
+            font-size: 1.6rem;
+            color: var(--text-regular);
+            line-height: 1.8;
+            max-width: 52rem;
+        }
+
+        .about-bio p + p { margin-top: 2rem; }
+
+        /* ── Footer ──────────────────────────────────────────────────────── */
+        footer {
+            padding: 4rem var(--gutter);
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        footer p {
+            font-size: 1.2rem;
+            color: var(--text-subtle);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ── Navigation ─────────────────────────────────────────────────── -->
+    <nav>
+        <a href="#" class="nav-logo">Nicola Valenzano</a>
+        <ul class="nav-links">
+            <li><a href="#simulations">Projects</a></li>
+            <li><a href="#about">About</a></li>
+        </ul>
+    </nav>
+
+    <!-- ── Hero ───────────────────────────────────────────────────────── -->
+    <section id="hero">
+        <canvas id="bh-canvas"></canvas>
+
+        <!-- Text overlay (stays fixed at top of hero while scrolling) -->
+        <div class="hero-content">
+            <p class="hero-label">Computational Cosmology</p>
+            <h1 class="hero-title">Cosmology<br><em>in Motion</em></h1>
+        </div>
+    </section>
+
+    <!-- ── Simulation section ──────────────────────────────────────────── -->
+    <section id="simulations" class="section">
+        <p class="section-label">Thesis Project · 2026</p>
+        <h2 class="section-title">Zel'dovich Distribution<br>Simulation</h2>
+        <p class="sim-description">
+            An interactive visualisation of the phase-space density n(q, η) derived from
+            Zel'dovich perturbation theory. The simulation evolves a cosmological density
+            field in 2D and 3D, showing how large-scale structure forms from small
+            initial perturbations in an expanding universe.
+        </p>
+        <div class="sim-frame-wrapper">
+            <iframe src="simulation.html" title="Zel'dovich Distribution Simulation"></iframe>
+        </div>
+    </section>
+
+    <!-- ── About ──────────────────────────────────────────────────────── -->
+    <section id="about" class="section">
+        <p class="section-label">About</p>
+        <div class="about-grid">
+            <!-- Portrait -->
+            <img class="about-portrait" src="information/nico.JPG" alt="Nicola Valenzano">
+
+            <div class="about-text">
+                <h2 class="about-name">Nicola Valenzano</h2>
+                <p class="about-role">Physics Undergraduate · Heidelberg University · 2026</p>
+                <div class="about-bio">
+                    <p>
+                        I am a Physics undergraduate student at Heidelberg University,
+                        working within the Department of Theoretical Astrophysics. My
+                        studies sit at the intersection of cosmology, gravitational theory,
+                        and computational physics.
+                    </p>
+                    <p>
+                        I am currently completing my Bachelor's thesis on the evolution
+                        of the dark matter density distribution in the universe. Using
+                        perturbation theory in the Zel'dovich approximation, I derive and
+                        simulate how the phase-space density field n(q, η) grows from
+                        small primordial perturbations into the large-scale structure we
+                        observe today.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Thesis PDF preview -->
+            <a class="thesis-preview" href="information/Bachelor Thesis.pdf" target="_blank" rel="noopener">
+                <iframe
+                    class="thesis-iframe"
+                    src="information/Bachelor Thesis.pdf#page=1&toolbar=0&navpanes=0&scrollbar=0&view=FitH"
+                    title="Bachelor Thesis preview"
+                    tabindex="-1"
+                    aria-hidden="true">
+                </iframe>
+                <div class="thesis-caption">
+                    <strong>Bachelor Thesis</strong>
+                    <span>Click to open PDF ↗</span>
+                </div>
+            </a>
+        </div>
+    </section>
+
+    <!-- ── Footer ─────────────────────────────────────────────────────── -->
+    <footer>
+        <p>© 2026 Nicola Valenzano · Heidelberg University</p>
+        <p>Bachelor Thesis in Physics</p>
+    </footer>
+
+    <!-- ── JS: Black hole WebGL hero ─────────────────────────────────── -->
+    <script type="module">
+    import * as THREE from 'three';
+
+    const VERT = `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position, 1.0); }`;
+
+    // Full Schwarzschild ray-tracer — same shader as blackhole_lensing.html
+    const FRAG = `
+precision highp float;
+
+uniform sampler2D uBackground;
+uniform vec2      uResolution;
+uniform vec3      uCamPos;
+uniform mat4      uCamRot;
+uniform float     uMass;
+uniform float     uFOV;
+uniform float     uHasTexture;
+uniform float     uBgZoom;
+
+varying vec2 vUv;
+
+#define PI        3.14159265359
+#define MAX_STEPS 150
+
+void getDerivs(vec3 pos, vec3 mom, out vec3 dpos, out vec3 dmom) {
+  float r  = max(length(pos), 1e-5);
+  vec3  l  = pos / r;
+  float pr = dot(l, mom);
+  float K  = -1.0 + pr;
+  float f  = 2.0 * uMass / r;
+  dpos = mom - f * K * l;
+  float c1 = 2.0 * uMass * K / (r * r);
+  float c2 = uMass * K * (2.0 * pr + K) / (r * r * r);
+  dmom = c1 * mom - c2 * pos;
+}
+
+vec3 starfield(vec3 d) {
+  vec2 p1 = vec2(atan(d.y, d.x), acos(clamp(d.z,-1.0,1.0))) * 180.0;
+  vec2 p2 = p1 * 3.7;
+  float h1 = fract(sin(dot(floor(p1), vec2(127.1, 311.7))) * 43758.5);
+  float h2 = fract(sin(dot(floor(p2), vec2(269.5, 183.3))) * 17231.8);
+  float star = (h1 > 0.997 ? h1 * h1 : 0.0) + (h2 > 0.9993 ? h2 : 0.0);
+  float nebula = 0.012 * (0.5 + 0.5 * sin(d.x * 3.1 + d.z * 2.7))
+                       * (0.5 + 0.5 * sin(d.y * 4.3 + d.x * 1.9));
+  return vec3(0.01, 0.008, 0.025) + star * vec3(0.9, 0.93, 1.0) + nebula * vec3(0.2, 0.12, 0.35);
+}
+
+void main() {
+  vec2 uv      = (vUv - 0.5) * uResolution / uResolution.y;
+  vec3 rdLocal = normalize(vec3(uv, 0.5 / uFOV));
+  vec3 rd      = normalize((uCamRot * vec4(rdLocal, 0.0)).xyz);
+
+  vec3 pos = uCamPos;
+  vec3 mom = rd;
+
+  // Exact null-momentum init
+  float r0   = length(pos);
+  float pr0  = dot(pos / r0, mom);
+  float aq   = 0.5 - uMass * pr0 * pr0 / r0;
+  float bq   = 2.0 * uMass * pr0 / r0;
+  float cq   = -(0.5 + uMass / r0);
+  float disc = max(bq * bq - 4.0 * aq * cq, 0.0);
+  float sc   = (-bq + sqrt(disc)) / (2.0 * max(abs(aq), 1e-6));
+  mom *= max(sc, 0.5);
+
+  float rh         = 2.0 * uMass;
+  float rEscape    = max(length(uCamPos) * 2.5, 200.0 * uMass);
+  bool  hitHorizon = false;
+  float rDiskInner = 6.0  * uMass;
+  float rDiskOuter = 18.0 * uMass;
+  float diskH      = 0.5  * uMass;
+  float diskAtten  = 0.0;
+  vec3  diskEmit   = vec3(0.0);
+
+  for (int i = 0; i < MAX_STEPS; i++) {
+    float r = length(pos);
+    if (r < rh * 1.1) { hitHorizon = true; break; }
+    if (r > rEscape)   { break; }
+    float h = clamp(0.06 * (r - rh), 0.05 * uMass, 2.5 * uMass);
+    vec3 dp1, dm1; getDerivs(pos, mom, dp1, dm1);
+    vec3 dp2, dm2; getDerivs(pos + h * dp1, mom + h * dm1, dp2, dm2);
+    vec3 newPos = pos + 0.5 * h * (dp1 + dp2);
+    vec3 newMom = mom + 0.5 * h * (dm1 + dm2);
+    vec3  mid  = 0.5 * (pos + newPos);
+    float rCyl = length(mid.xz);
+    if (rCyl >= rDiskInner && rCyl <= rDiskOuter) {
+      float vR     = clamp((rCyl / uMass - 6.0) / 12.0, 0.0, 1.0);
+      float radial = exp(-3.5 * vR) * (1.0 - smoothstep(0.78, 1.0, vR));
+      float vert   = exp(-(mid.y * mid.y) / (diskH * diskH));
+      float dTau   = radial * vert * h / uMass;
+      diskAtten   += dTau;
+      vec3 emColor = mix(vec3(1.00, 0.45, 0.08), vec3(0.85, 0.92, 1.00), (1.0 - vR) * (1.0 - vR));
+      diskEmit    += emColor * dTau;
+    }
+    pos = newPos;
+    mom = newMom;
+  }
+
+  vec3 col;
+  if (hitHorizon) {
+    col = vec3(0.0);
+  } else {
+    vec3  d    = normalize(mom);
+    float u_bg = (atan(d.y, d.x) + PI) / (2.0 * PI) * uBgZoom;
+    float v_bg = acos(clamp(d.z, -1.0, 1.0)) / PI * uBgZoom;
+    vec3 bgCol = uHasTexture > 0.5
+        ? texture2D(uBackground, vec2(u_bg, v_bg)).rgb
+        : starfield(d);
+    if (diskAtten > 0.001) {
+      vec3  srcColor = diskEmit / diskAtten;
+      float bgFactor = exp(-diskAtten * 1.8);
+      col = bgCol * bgFactor + srcColor * (1.0 - bgFactor) * 1.6;
+    } else {
+      col = bgCol;
+    }
+  }
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+    // ── Three.js setup ───────────────────────────────────────────────────────
+    const canvas   = document.getElementById('bh-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    const scene       = new THREE.Scene();
+    const orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+    // ── Scene parameters ─────────────────────────────────────────────────────
+    const M      = 2.0;
+    const ELEV   = 22 * Math.PI / 180;   // 22° above equatorial plane
+    let   az     = -1.05;                 // starting azimuth (radians)
+    const R_FAR  = 60.0;                  // initial camera distance (30M)
+    const R_NEAR = 4.5;                   // closest on full scroll (~2.25M, just outside horizon)
+
+    function makeCamPos(r) {
+        return new THREE.Vector3(
+            r * Math.cos(ELEV) * Math.cos(az),
+            r * Math.sin(ELEV),
+            r * Math.cos(ELEV) * Math.sin(az)
+        );
+    }
+
+    const uniforms = {
+        uBackground: { value: null },
+        uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+        uCamPos:     { value: makeCamPos(R_FAR) },
+        uCamRot:     { value: new THREE.Matrix4() },
+        uMass:       { value: M },
+        uFOV:        { value: Math.tan(25.5 * Math.PI / 180) }, // 51° vertical FOV (−15%)
+        uHasTexture: { value: 0.0 },
+        uBgZoom:     { value: 3.0 },
+    };
+
+    new THREE.TextureLoader().load(
+        'information/Hubble_Galaxies.png',
+        tex => {
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            uniforms.uBackground.value = tex;
+            uniforms.uHasTexture.value = 1.0;
+        }
+    );
+
+    const material = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms });
+    scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material));
+
+    // ── Scroll-driven camera distance (Keplerian free-fall) ──────────────────
+    const hero = document.getElementById('hero');
+    function getScrollR() {
+        const scrollable = hero.offsetHeight - window.innerHeight;
+        const s = scrollable > 0 ? Math.max(0, Math.min(1, window.scrollY / scrollable)) : 0;
+        const A = Math.pow(R_FAR,  1.5);
+        const B = Math.pow(R_NEAR, 1.5) - A;
+        return Math.pow(A + s * B, 2 / 3);
+    }
+
+    window.addEventListener('resize', () => {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+    });
+
+    // ── Camera basis ─────────────────────────────────────────────────────────
+    const worldUp = new THREE.Vector3(0, 1, 0);
+    function updateCameraBasis(pos) {
+        const lookDir = pos.clone().normalize().negate();
+        const right   = new THREE.Vector3().crossVectors(lookDir, worldUp);
+        if (right.lengthSq() < 1e-10) right.set(1, 0, 0); else right.normalize();
+        const realUp  = new THREE.Vector3().crossVectors(right, lookDir).normalize();
+        uniforms.uCamRot.value.makeBasis(right, realUp, lookDir);
+    }
+
+    let heroVisible = true;
+    new IntersectionObserver(
+        e => { heroVisible = e[0].isIntersecting; }, { threshold: 0 }
+    ).observe(hero);
+
+    // ── Render loop ──────────────────────────────────────────────────────────
+    const clock    = new THREE.Clock();
+    const ROT_SPEED = 0.025;   // rad/s — slow orbit
+
+    function animate() {
+        requestAnimationFrame(animate);
+        if (!heroVisible) return;
+        az = -1.05 + clock.getElapsedTime() * ROT_SPEED;
+        const r   = getScrollR();
+        const pos = makeCamPos(r);
+        uniforms.uCamPos.value.copy(pos);
+        updateCameraBasis(pos);
+        renderer.render(scene, orthoCamera);
+    }
+    animate();
+    </script>
+
+
+</body>
+</html>

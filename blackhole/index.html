@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Black Hole Ray Tracer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #000;
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        #canvas-container { position: fixed; inset: 0; }
+
+        #ui-container {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 1.2rem;
+            padding: 1.6rem;
+            min-width: 22rem;
+            z-index: 10;
+        }
+        #ui-container h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.08em; margin-bottom: 1.4rem; color: #fff; }
+        .control-group { margin-bottom: 1rem; }
+        .control-group label { display: block; font-size: 0.75rem; color: #aaa; margin-bottom: 0.4rem; }
+        .control-group select,
+        .control-group input[type=range] { width: 100%; accent-color: #584dff; }
+        .control-group select {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: #fff;
+            padding: 0.4rem 0.6rem;
+            border-radius: 0.5rem;
+            font-size: 0.8rem;
+            width: 100%;
+        }
+        .control-group span { font-size: 0.75rem; color: #888; }
+        button {
+            width: 100%;
+            padding: 0.6rem 1rem;
+            background: rgba(88,77,255,0.2);
+            border: 1px solid rgba(88,77,255,0.5);
+            color: #fff;
+            border-radius: 0.6rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.2s;
+        }
+        button:hover { background: rgba(88,77,255,0.4); }
+        .instruction { font-size: 0.7rem; color: #555; }
+
+        /* Camera angle readout */
+        #cam-stats {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 0.8rem;
+            padding: 1rem 2rem;
+            font-family: 'Inter', monospace;
+            font-size: 0.85rem;
+            color: #ccc;
+            display: flex;
+            gap: 2.4rem;
+            pointer-events: none;
+            z-index: 20;
+        }
+        #cam-stats span { color: #fff; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="ui-container">
+        <h1>Event Horizon</h1>
+        <div class="controls">
+            <div class="control-group">
+                <label>Metric Type</label>
+                <select id="metric-select">
+                    <option value="0">Schwarzschild (Static)</option>
+                    <option value="1">Reissner-Nordström (Charged)</option>
+                    <option value="2">Kerr (Rotating)</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Mass (M) &nbsp;<span id="mass-val">1.0</span></label>
+                <input type="range" id="mass-slider" min="0.1" max="2.0" step="0.1" value="1.0">
+            </div>
+            <div class="control-group" id="charge-group">
+                <label>Charge (Q) &nbsp;<span id="charge-val">0.0</span></label>
+                <input type="range" id="charge-slider" min="0.0" max="1.5" step="0.1" value="0.0">
+            </div>
+            <div class="control-group" id="spin-group">
+                <label>Spin (a) &nbsp;<span id="spin-val">0.0</span></label>
+                <input type="range" id="spin-slider" min="0.0" max="0.99" step="0.01" value="0.0">
+            </div>
+            <div class="control-group">
+                <button id="pause-btn">Pause Simulation</button>
+            </div>
+            <div class="control-group">
+                <p class="instruction">Drag to orbit · Scroll to zoom</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Camera angle readout bar -->
+    <div id="cam-stats">
+        Elevation&nbsp;<span id="stat-elev">—</span>°
+        &nbsp;·&nbsp;
+        Azimuth&nbsp;<span id="stat-az">—</span>°
+        &nbsp;·&nbsp;
+        Distance&nbsp;<span id="stat-r">—</span>&nbsp;M
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<!-- Serve via:  python3 -m http.server 8000  then open http://localhost:8000/blackhole_lensing.html -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schwarzschild Gravitational Lensing</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --glass-bg:     rgba(10, 10, 20, 0.72);
+    --glass-border: rgba(255,255,255,0.10);
+    --accent:       #7b6fff;
+    --text:         #e8e4ff;
+    --muted:        #7a758a;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  canvas {
+    display: block;
+    width: 100%; height: 100%;
+    cursor: grab;
+  }
+  canvas:active { cursor: grabbing; }
+
+  /* ── Control panel ─────────────────────────────────── */
+  #panel {
+    position: fixed;
+    top: 1.8rem; right: 1.8rem;
+    width: 22rem;
+    padding: 1.6rem;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 1.2rem;
+    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    user-select: none;
+  }
+
+  .panel-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 1.4rem;
+  }
+
+  .ctrl-group { margin-bottom: 1.2rem; }
+
+  .ctrl-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .ctrl-label span {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  input[type=range] {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 3px;
+    background: rgba(123,111,255,0.25);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  input[type=range]::-webkit-slider-thumb:active { transform: scale(1.3); }
+
+  .readout {
+    margin-top: 1.4rem;
+    padding-top: 1.0rem;
+    border-top: 1px solid var(--glass-border);
+    font-size: 0.74rem;
+    color: var(--muted);
+    line-height: 1.8;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Info banner ────────────────────────────────────── */
+  #banner {
+    position: fixed;
+    bottom: 1.4rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 0.7rem;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    padding: 0.6rem 1.2rem;
+    font-size: 0.74rem;
+    color: var(--muted);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: opacity 0.4s;
+  }
+  #banner button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0;
+  }
+  #banner button:hover { color: var(--text); }
+
+  /* ── Drag hint ──────────────────────────────────────── */
+  #hint {
+    position: fixed;
+    bottom: 4.6rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.72rem;
+    color: var(--muted);
+    opacity: 0.7;
+    pointer-events: none;
+    transition: opacity 1s;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<!-- Control panel -->
+<div id="panel">
+  <div class="panel-title">Schwarzschild Lensing</div>
+
+  <div class="ctrl-group">
+    <div class="ctrl-label">Mass M <span id="mass-val">2.0</span></div>
+    <input type="range" id="mass" min="0.5" max="5.0" step="0.1" value="2.0">
+  </div>
+
+  <div class="ctrl-group">
+    <div class="ctrl-label">Camera r/M <span id="dist-val">50</span></div>
+    <input type="range" id="dist" min="10" max="200" step="1" value="50">
+  </div>
+
+  <div class="ctrl-group">
+    <div class="ctrl-label">Field of View <span id="fov-val">60°</span></div>
+    <input type="range" id="fov" min="20" max="90" step="1" value="60">
+  </div>
+
+  <div class="readout" id="stats">
+    Elev: 0.0° &nbsp;|&nbsp; Az: 0.0°<br>
+    r/M: 50.0 &nbsp;|&nbsp; r_h = 2M
+  </div>
+</div>
+
+<!-- Info banner -->
+<div id="banner">
+  <span>For Hubble background: <code>python3 -m http.server 8000</code></span>
+  <button onclick="document.getElementById('banner').style.opacity='0';setTimeout(()=>this.parentElement.remove(),400)">✕</button>
+</div>
+
+<div id="hint">Drag to orbit &nbsp;·&nbsp; Scroll to zoom</div>
+
+<!-- Three.js -->
+<script type="importmap">
+  { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ── Vertex shader (trivial pass-through) ──────────────────────────────────────
+const VERT = `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = vec4(position, 1.0);
+}`;
+
+// ── Fragment shader: Schwarzschild null geodesics in Kerr-Schild coordinates ─
+const FRAG = `
+precision highp float;
+
+uniform sampler2D uBackground; // Hubble_Galaxies.png (equirectangular-mapped)
+uniform vec2      uResolution;
+uniform vec3      uCamPos;
+uniform mat4      uCamRot;     // cols: right, up, lookDir (toward BH)
+uniform float     uMass;       // black hole mass M (scene units)
+uniform float     uFOV;        // tan(half_fov)
+uniform float     uHasTexture; // 1.0 = texture loaded, 0.0 = use procedural
+uniform float     uBgZoom;    // >1 tiles image smaller (zoom out background)
+
+varying vec2 vUv;
+
+#define PI        3.14159265359
+#define MAX_STEPS 150
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Analytical Schwarzschild derivatives in Kerr-Schild Cartesian coordinates.
+//
+// Metric (inverse): g^μν = η^μν - (2M/r) k^μ k^ν
+//   k^μ = (1, x/r, y/r, z/r),   η^μν = diag(-1,+1,+1,+1)
+//
+// Hamiltonian H = (1/2) g^μν p_μ p_ν = 0 (null geodesic)
+//   State: pos=(x,y,z), mom=(px,py,pz), pt=-1 (conserved energy E=1)
+//
+// Hamilton eqs:
+//   dpos/dλ = mom - (2M/r²) K · pos/r    where K = pt + pr = -1 + dot(pos/r, mom)
+//   dmom/dλ = (2MK/r²) mom - (MK(2pr+K)/r³) pos
+// ─────────────────────────────────────────────────────────────────────────────
+void getDerivs(vec3 pos, vec3 mom, out vec3 dpos, out vec3 dmom) {
+  float r  = max(length(pos), 1e-5);
+  vec3  l  = pos / r;            // unit radial vector (Kerr-Schild null vector spatial part)
+  float pr = dot(l, mom);        // radial projection of 3-momentum
+  float K  = -1.0 + pr;          // k^μ p_μ with pt = -1
+  float f  = 2.0 * uMass / r;
+
+  dpos = mom - f * K * l;
+
+  // dp_i/dλ = (2MK/r²) p_i  -  (MK(2pr+K)/r³) x^i
+  float c1 = 2.0 * uMass * K / (r * r);
+  float c2 = uMass * K * (2.0 * pr + K) / (r * r * r);
+  dmom = c1 * mom - c2 * pos;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Procedural starfield fallback (used when Hubble texture is unavailable).
+// ─────────────────────────────────────────────────────────────────────────────
+vec3 starfield(vec3 d) {
+  // Two layers of stars at different angular scales
+  vec2 p1 = vec2(atan(d.y, d.x), acos(clamp(d.z,-1.0,1.0))) * 180.0;
+  vec2 p2 = p1 * 3.7;
+  float h1 = fract(sin(dot(floor(p1), vec2(127.1, 311.7))) * 43758.5);
+  float h2 = fract(sin(dot(floor(p2), vec2(269.5, 183.3))) * 17231.8);
+  float star = (h1 > 0.997 ? h1 * h1 : 0.0) + (h2 > 0.9993 ? h2 : 0.0);
+  // Faint nebula glow
+  float nebula = 0.012 * (0.5 + 0.5 * sin(d.x * 3.1 + d.z * 2.7))
+                       * (0.5 + 0.5 * sin(d.y * 4.3 + d.x * 1.9));
+  return vec3(0.01, 0.008, 0.025) + star * vec3(0.9, 0.93, 1.0) + nebula * vec3(0.2, 0.12, 0.35);
+}
+
+void main() {
+  // ── 1. Build camera ray ────────────────────────────────────────────────────
+  // uv.y ∈ [-0.5, 0.5],  z = 0.5/uFOV gives half-FOV = atan(uFOV) vertically
+  vec2 uv      = (vUv - 0.5) * uResolution / uResolution.y;
+  vec3 rdLocal = normalize(vec3(uv, 0.5 / uFOV));
+  // uCamRot cols: (right, realUp, lookDir) — lookDir = toward BH
+  vec3 rd      = normalize((uCamRot * vec4(rdLocal, 0.0)).xyz);
+
+  // ── 2. Initial conditions ──────────────────────────────────────────────────
+  vec3 pos = uCamPos;
+  vec3 mom = rd;   // unit 3-momentum; will be rescaled below
+
+  // Exact null-init: find scale s so that H(s·mom_unit) = 0 at the camera.
+  // Solves:  a·s² + b·s + c = 0
+  //   a = 0.5 - M·pr0²/r0
+  //   b = 2M·pr0/r0
+  //   c = -(0.5 + M/r0)
+  // where pr0 = dot(pos/r0, mom_unit)
+  float r0   = length(pos);
+  float pr0  = dot(pos / r0, mom);
+  float aq   = 0.5 - uMass * pr0 * pr0 / r0;
+  float bq   = 2.0 * uMass * pr0 / r0;
+  float cq   = -(0.5 + uMass / r0);
+  float disc = max(bq * bq - 4.0 * aq * cq, 0.0);
+  float sc   = (-bq + sqrt(disc)) / (2.0 * max(abs(aq), 1e-6));
+  mom *= max(sc, 0.5);   // safety floor
+
+  // ── 3. RK2 geodesic integration (Heun's method) ───────────────────────────
+  float rh         = 2.0 * uMass;
+  float rEscape    = max(length(uCamPos) * 2.5, 200.0 * uMass);
+  bool  hitHorizon = false;
+  float rDiskInner = 6.0  * uMass;   // ISCO
+  float rDiskOuter = 18.0 * uMass;   // outer edge
+  float diskH      = 0.5  * uMass;   // Gaussian scale height (thin-disk puffiness)
+  float diskAtten  = 0.0;            // accumulated optical depth along ray
+  vec3  diskEmit   = vec3(0.0);      // accumulated emission (colour × dτ)
+
+  for (int i = 0; i < MAX_STEPS; i++) {
+    float r = length(pos);
+
+    // Termination: horizon check with 10% buffer for step-overshoot safety
+    if (r < rh * 1.1) { hitHorizon = true; break; }
+    if (r > rEscape)   { break; }
+
+    // Adaptive step: fine near horizon, coarse far away
+    float h = clamp(0.06 * (r - rh), 0.05 * uMass, 2.5 * uMass);
+
+    // Stage 1
+    vec3 dp1, dm1;
+    getDerivs(pos, mom, dp1, dm1);
+
+    // Stage 2 (Euler predictor)
+    vec3 dp2, dm2;
+    getDerivs(pos + h * dp1, mom + h * dm1, dp2, dm2);
+
+    vec3 newPos = pos + 0.5 * h * (dp1 + dp2);
+    vec3 newMom = mom + 0.5 * h * (dm1 + dm2);
+
+    // ── Accretion disk: volumetric emission integral ──────────────────────────
+    // Sample at step midpoint for second-order accuracy.
+    // Vertical Gaussian gives soft glow above/below the equatorial plane.
+    vec3  mid  = 0.5 * (pos + newPos);
+    float rCyl = length(mid.xz);
+    if (rCyl >= rDiskInner && rCyl <= rDiskOuter) {
+      float vR     = clamp((rCyl / uMass - 6.0) / 12.0, 0.0, 1.0);
+      float radial = exp(-3.5 * vR) * (1.0 - smoothstep(0.78, 1.0, vR));
+      float vert   = exp(-(mid.y * mid.y) / (diskH * diskH));  // Gaussian in y
+      float dTau   = radial * vert * h / uMass;                 // M-normalised optical depth
+      diskAtten   += dTau;
+      // Temperature gradient: hot blue-white at ISCO → warm orange at outer edge
+      vec3 emColor = mix(vec3(1.00, 0.45, 0.08),               // outer: orange
+                         vec3(0.85, 0.92, 1.00),               // inner: blue-white
+                         (1.0 - vR) * (1.0 - vR));
+      diskEmit    += emColor * dTau;
+    }
+
+    pos = newPos;
+    mom = newMom;
+  }
+
+  // ── 4. Background / disk composite ─────────────────────────────────────────
+  vec3 col;
+
+  if (hitHorizon) {
+    col = vec3(0.0);    // event horizon: perfect black
+  } else {
+    // Escape direction → background sample
+    vec3  d = normalize(mom);
+    float u_bg = (atan(d.y, d.x) + PI) / (2.0 * PI) * uBgZoom;
+    float v_bg = acos(clamp(d.z, -1.0, 1.0)) / PI * uBgZoom;
+    vec3 bgCol;
+    if (uHasTexture > 0.5) {
+      bgCol = texture2D(uBackground, vec2(u_bg, v_bg)).rgb;
+    } else {
+      bgCol = starfield(d);
+    }
+
+    if (diskAtten > 0.001) {
+      // Radiative transfer: background attenuated by disk opacity,
+      // disk glows with its source-function colour.
+      vec3  srcColor = diskEmit / diskAtten;          // emission-weighted average colour
+      float bgFactor = exp(-diskAtten * 1.8);         // background attenuation
+      col = bgCol * bgFactor + srcColor * (1.0 - bgFactor) * 1.6;
+    } else {
+      col = bgCol;
+    }
+  }
+
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+// ── Three.js renderer ─────────────────────────────────────────────────────────
+const canvas   = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+const scene      = new THREE.Scene();
+const orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let M       = 2.0;
+let distInM = 50.0;   // camera distance in units of M
+let fovDeg  = 60.0;
+
+// Camera position: start at ~30° elevation so the disk ring is visible immediately.
+const camPos = new THREE.Vector3(0, distInM * M * 0.5, distInM * M * 0.866).normalize().multiplyScalar(distInM * M);
+
+// ── Uniforms ──────────────────────────────────────────────────────────────────
+const uniforms = {
+  uBackground: { value: null },
+  uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+  uCamPos:     { value: camPos.clone() },
+  uCamRot:     { value: new THREE.Matrix4() },
+  uMass:       { value: M },
+  uFOV:        { value: Math.tan(fovDeg * Math.PI / 360.0) },
+  uHasTexture: { value: 0.0 },
+  uBgZoom:     { value: 3.0 },
+};
+
+// ── Hubble texture ────────────────────────────────────────────────────────────
+new THREE.TextureLoader().load(
+  'information/Hubble_Galaxies.png',
+  tex => {
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    uniforms.uBackground.value = tex;
+    uniforms.uHasTexture.value = 1.0;
+    document.getElementById('banner').style.opacity = '0';
+    setTimeout(() => {
+      const b = document.getElementById('banner');
+      if (b) b.remove();
+    }, 600);
+  },
+  undefined,
+  () => {
+    console.warn('Hubble_Galaxies.png not found. Procedural starfield active.\n' +
+                 'Serve via: python3 -m http.server 8000');
+  }
+);
+
+// ── Mesh ──────────────────────────────────────────────────────────────────────
+const material = new THREE.ShaderMaterial({
+  vertexShader:   VERT,
+  fragmentShader: FRAG,
+  uniforms,
+});
+scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material));
+// Accretion disk is ray-traced inside the GLSL shader (equatorial plane crossing test).
+
+// ── Camera orbit controls ────────────────────────────────────────────────────
+let isDragging = false;
+let prevMouse  = { x: 0, y: 0 };
+
+canvas.addEventListener('mousedown', e => {
+  isDragging = true;
+  prevMouse  = { x: e.clientX, y: e.clientY };
+});
+window.addEventListener('mouseup', () => { isDragging = false; });
+
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - prevMouse.x;
+  const dy = e.clientY - prevMouse.y;
+
+  // Horizontal drag: orbit around world Y-axis
+  const rotY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -dx * 0.005);
+  camPos.applyQuaternion(rotY);
+
+  // Vertical drag: orbit around local right-axis (with gimbal-lock guard)
+  const lookDir  = camPos.clone().normalize().negate();
+  const rightVec = new THREE.Vector3().crossVectors(lookDir, new THREE.Vector3(0, 1, 0));
+  if (rightVec.lengthSq() < 1e-10) rightVec.set(1, 0, 0); else rightVec.normalize();
+  const rotX = new THREE.Quaternion().setFromAxisAngle(rightVec, -dy * 0.005);
+  camPos.applyQuaternion(rotX);
+
+  prevMouse = { x: e.clientX, y: e.clientY };
+});
+
+// Touch support
+let lastTouch = null;
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    isDragging = true;
+    lastTouch  = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }
+}, { passive: true });
+canvas.addEventListener('touchend', () => { isDragging = false; }, { passive: true });
+canvas.addEventListener('touchmove', e => {
+  if (!isDragging || e.touches.length !== 1) return;
+  const dx = e.touches[0].clientX - lastTouch.x;
+  const dy = e.touches[0].clientY - lastTouch.y;
+  const rotY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -dx * 0.005);
+  camPos.applyQuaternion(rotY);
+  const lookDirT = camPos.clone().normalize().negate();
+  const rightT   = new THREE.Vector3().crossVectors(lookDirT, new THREE.Vector3(0, 1, 0));
+  if (rightT.lengthSq() < 1e-10) rightT.set(1, 0, 0); else rightT.normalize();
+  const rotX = new THREE.Quaternion().setFromAxisAngle(rightT, -dy * 0.005);
+  camPos.applyQuaternion(rotX);
+  lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+
+// Scroll to zoom — also keeps distInM in sync so sliders stay consistent
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = 1.0 + e.deltaY * 0.001;
+  const newLen = Math.max(3.5 * M, Math.min(800.0, camPos.length() * factor));
+  camPos.setLength(newLen);
+  distInM = newLen / M;
+  document.getElementById('dist').value = Math.min(200, Math.max(10, distInM));
+  document.getElementById('dist-val').textContent = Math.round(distInM);
+}, { passive: false });
+
+// ── UI slider wiring ──────────────────────────────────────────────────────────
+document.getElementById('mass').addEventListener('input', e => {
+  M = parseFloat(e.target.value);
+  uniforms.uMass.value = M;
+  document.getElementById('mass-val').textContent = M.toFixed(1);
+  // Keep camera at the same relative distance (in M-units) and enforce minimum safe radius
+  const target = Math.max(distInM, 4.0) * M;
+  camPos.setLength(target);
+  // Disk radii (6M–18M) are computed inside the GLSL shader from uMass — nothing else to update.
+});
+
+document.getElementById('dist').addEventListener('input', e => {
+  distInM = parseFloat(e.target.value);
+  document.getElementById('dist-val').textContent = distInM.toFixed(0);
+  // Set camera distance in scene units
+  const newLen = distInM * M;
+  camPos.setLength(Math.max(3.5 * M, newLen));
+});
+
+document.getElementById('fov').addEventListener('input', e => {
+  fovDeg = parseFloat(e.target.value);
+  uniforms.uFOV.value = Math.tan(fovDeg * Math.PI / 360.0);
+  document.getElementById('fov-val').textContent = fovDeg.toFixed(0) + '°';
+});
+
+// ── Resize ────────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+});
+
+// ── Camera basis update ───────────────────────────────────────────────────────
+const worldUp = new THREE.Vector3(0, 1, 0);
+
+function updateCameraBasis() {
+  // lookDir: unit vector from camera toward black hole (origin)
+  const lookDir = camPos.clone().normalize().negate();
+  const right   = new THREE.Vector3().crossVectors(lookDir, worldUp);
+  // Gimbal-lock guard: near poles lookDir ≈ ±worldUp, cross product → zero
+  if (right.lengthSq() < 1e-10) right.set(1, 0, 0); else right.normalize();
+  const realUp  = new THREE.Vector3().crossVectors(right, lookDir).normalize();
+  // makeBasis(col0=right, col1=realUp, col2=lookDir)
+  // Shader: rdLocal.z=+1 → col2 = lookDir → ray toward BH ✓
+  uniforms.uCamRot.value.makeBasis(right, realUp, lookDir);
+}
+
+// ── Stats readout ─────────────────────────────────────────────────────────────
+const statsEl = document.getElementById('stats');
+const hintEl  = document.getElementById('hint');
+let   moved   = false;
+
+function updateStats() {
+  const r    = camPos.length();
+  const elev = Math.asin(Math.max(-1, Math.min(1, camPos.y / r))) * 180 / Math.PI;
+  const az   = Math.atan2(camPos.x, camPos.z) * 180 / Math.PI;
+  statsEl.innerHTML =
+    `Elev: ${elev.toFixed(1)}°&nbsp;&nbsp;|&nbsp;&nbsp;Az: ${az.toFixed(1)}°<br>` +
+    `r/M: ${(r / M).toFixed(1)}&nbsp;&nbsp;|&nbsp;&nbsp;r_h = 2M`;
+  if (!moved && isDragging) {
+    moved = true;
+    hintEl.style.opacity = '0';
+  }
+}
+
+// ── Render loop ───────────────────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  uniforms.uCamPos.value.copy(camPos);
+  updateCameraBasis();
+  updateStats();
+
+  // Single lensing pass — disk is ray-traced inside the GLSL shader.
+  renderer.render(scene, orthoCamera);
+}
+
+animate();
+</script>
+
+</body>
+</html>
