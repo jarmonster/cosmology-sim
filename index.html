@@ -17,7 +17,7 @@
 
     <style>
         /* ── Reset ────────────────────────────────────────────────────────── */
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
         /* ── Design system ───────────────────────────────────────────────── */
         :root {
@@ -335,6 +335,72 @@
         footer p {
             font-size: 1.2rem;
             color: var(--text-subtle);
+        }
+
+        /* ── Responsive / Mobile ─────────────────────────────────────────── */
+
+        /* Remove overlap transform below 1200px — thesis preview sits cleanly in its column */
+        @media (max-width: 1200px) {
+            .thesis-preview { transform: none; }
+        }
+
+        /* Tablet — 768px */
+        @media (max-width: 768px) {
+            :root {
+                --gutter: 1.6rem;
+                --vertical-gutter: 10rem;
+            }
+
+            nav { padding: 1.6rem var(--gutter); }
+            .nav-links { gap: 2rem; }
+
+            .hero-content { padding: 0 var(--gutter) 4rem; }
+
+            /* Full-width sim: break out of section padding */
+            .sim-frame-wrapper {
+                margin-left: calc(-1 * var(--gutter));
+                margin-right: calc(-1 * var(--gutter));
+                border-radius: 0;
+                border-left: none;
+                border-right: none;
+            }
+            .sim-frame-wrapper iframe { height: 100vw; }
+            #simulations .sim-description { margin-bottom: 4rem; }
+
+            /* Re-show thesis link below bio text, centered */
+            .thesis-preview {
+                display: block;
+                width: 100%;
+                margin-top: 3.2rem;
+            }
+
+            footer { flex-direction: column; gap: 0.8rem; align-items: center; text-align: center; }
+        }
+
+        /* Mobile — 480px */
+        @media (max-width: 480px) {
+            html { font-size: 55%; }
+
+            :root {
+                --gutter: 1.2rem;
+                --vertical-gutter: 7rem;
+            }
+
+            .nav-links { display: none; }
+
+            .hero-content { padding: 0 var(--gutter) 3.2rem; }
+
+            .about-portrait { aspect-ratio: 4 / 3; }
+            .about-bio { max-width: 100%; }
+        }
+
+        /* Touch devices — ensure tappable nav links */
+        @media (hover: none) and (pointer: coarse) {
+            .nav-links a {
+                display: flex;
+                align-items: center;
+                min-height: 4.4rem;
+            }
         }
     </style>
 </head>
