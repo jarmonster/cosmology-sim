@@ -209,6 +209,20 @@
     .katex { color: #c9d1d9; font-size: 1em; }
     .katex-display { margin: 3px 0; overflow-x: auto; }
     #eq-box .katex { font-size: 0.95em; }
+
+    /* ── Mobile: strip non-essential chrome to maximise plot area ── */
+    @media (max-width: 768px) {
+      header { padding: 8px 14px 6px; }
+      header h1 { font-size: 0.95rem; }
+      header p.subtitle { display: none; }
+      #eq-box { display: none; }
+      #plot-container { padding: 0 6px; }
+      #controls { padding: 8px 12px 10px; gap: 8px; }
+      #params-box { display: none; }
+      .sep { display: none; }
+      input[type="range"]::-webkit-slider-thumb { width: 20px; height: 20px; }
+      input[type="range"]::-moz-range-thumb    { width: 20px; height: 20px; }
+    }
   </style>
 </head>
 <body>

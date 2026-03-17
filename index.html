@@ -364,15 +364,16 @@
                 border-left: none;
                 border-right: none;
             }
-            .sim-frame-wrapper iframe { height: 100vw; }
+            .sim-frame-wrapper iframe { height: max(100vw, 65vh); }
             #simulations .sim-description { margin-bottom: 4rem; }
 
-            /* Re-show thesis link below bio text, centered */
+            /* Re-show thesis link below bio text, centered — PDF iframe hidden on mobile */
             .thesis-preview {
                 display: block;
                 width: 100%;
                 margin-top: 3.2rem;
             }
+            .thesis-iframe { display: none; }
 
             footer { flex-direction: column; gap: 0.8rem; align-items: center; text-align: center; }
         }
