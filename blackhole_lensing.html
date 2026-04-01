@@ -293,12 +293,6 @@ void main() {
   float rh         = 2.0 * uMass;
   float rEscape    = max(length(uCamPos) * 2.5, 200.0 * uMass);
   bool  hitHorizon = false;
-  float rDiskInner = 6.0  * uMass;   // ISCO
-  float rDiskOuter = 18.0 * uMass;   // outer edge
-  float diskH      = 0.5  * uMass;   // Gaussian scale height (thin-disk puffiness)
-  float diskAtten  = 0.0;            // accumulated optical depth along ray
-  vec3  diskEmit   = vec3(0.0);      // accumulated emission (colour × dτ)
-
   for (int i = 0; i < MAX_STEPS; i++) {
     float r = length(pos);
 
@@ -317,32 +311,11 @@ void main() {
     vec3 dp2, dm2;
     getDerivs(pos + h * dp1, mom + h * dm1, dp2, dm2);
 
-    vec3 newPos = pos + 0.5 * h * (dp1 + dp2);
-    vec3 newMom = mom + 0.5 * h * (dm1 + dm2);
-
-    // ── Accretion disk: volumetric emission integral ──────────────────────────
-    // Sample at step midpoint for second-order accuracy.
-    // Vertical Gaussian gives soft glow above/below the equatorial plane.
-    vec3  mid  = 0.5 * (pos + newPos);
-    float rCyl = length(mid.xz);
-    if (rCyl >= rDiskInner && rCyl <= rDiskOuter) {
-      float vR     = clamp((rCyl / uMass - 6.0) / 12.0, 0.0, 1.0);
-      float radial = exp(-3.5 * vR) * (1.0 - smoothstep(0.78, 1.0, vR));
-      float vert   = exp(-(mid.y * mid.y) / (diskH * diskH));  // Gaussian in y
-      float dTau   = radial * vert * h / uMass;                 // M-normalised optical depth
-      diskAtten   += dTau;
-      // Temperature gradient: hot blue-white at ISCO → warm orange at outer edge
-      vec3 emColor = mix(vec3(1.00, 0.45, 0.08),               // outer: orange
-                         vec3(0.85, 0.92, 1.00),               // inner: blue-white
-                         (1.0 - vR) * (1.0 - vR));
-      diskEmit    += emColor * dTau;
-    }
-
-    pos = newPos;
-    mom = newMom;
+    pos = pos + 0.5 * h * (dp1 + dp2);
+    mom = mom + 0.5 * h * (dm1 + dm2);
   }
 
-  // ── 4. Background / disk composite ─────────────────────────────────────────
+  // ── 4. Background composite ──────────────────────────────────────────────────
   vec3 col;
 
   if (hitHorizon) {
@@ -352,21 +325,10 @@ void main() {
     vec3  d = normalize(mom);
     float u_bg = (atan(d.y, d.x) + PI) / (2.0 * PI) * uBgZoom;
     float v_bg = acos(clamp(d.z, -1.0, 1.0)) / PI * uBgZoom;
-    vec3 bgCol;
     if (uHasTexture > 0.5) {
-      bgCol = texture2D(uBackground, vec2(u_bg, v_bg)).rgb;
+      col = texture2D(uBackground, vec2(u_bg, v_bg)).rgb;
     } else {
-      bgCol = starfield(d);
-    }
-
-    if (diskAtten > 0.001) {
-      // Radiative transfer: background attenuated by disk opacity,
-      // disk glows with its source-function colour.
-      vec3  srcColor = diskEmit / diskAtten;          // emission-weighted average colour
-      float bgFactor = exp(-diskAtten * 1.8);         // background attenuation
-      col = bgCol * bgFactor + srcColor * (1.0 - bgFactor) * 1.6;
-    } else {
-      col = bgCol;
+      col = starfield(d);
     }
   }
 

@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cold-Limit Distribution — n(q, η)</title>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"
+    onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false})">
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      overflow: hidden;
+      scrollbar-width: none;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    header {
+      padding: 18px 28px 10px;
+      border-bottom: 1px solid #21262d;
+    }
+    header h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #c9d1d9;
+    }
+    header p.subtitle {
+      font-size: 0.82rem;
+      color: #8b949e;
+      margin-top: 4px;
+    }
+
+    #eq-box {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      margin: 10px 28px;
+      padding: 10px 16px;
+      font-size: 0.80rem;
+      color: #8b949e;
+      line-height: 1.7;
+    }
+    #eq-box strong { color: #c9d1d9; }
+
+    /* ── Main view container: plot + optional slice panel ── */
+    #view-container {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    #plot-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 0 16px 0 28px;
+      min-width: 0;
+      min-height: 0;
+    }
+    #plot { width: 100%; flex: 1; min-height: 0; }
+
+    /* ── Slice panel (visible only in volume mode) ── */
+    #slice-panel {
+      display: none;
+      flex-direction: column;
+      width: 370px;
+      min-width: 300px;
+      padding: 8px 16px 0 12px;
+      border-left: 1px solid #21262d;
+    }
+    #slice-panel.active { display: flex; }
+
+    .slice-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #c9d1d9;
+      padding-bottom: 6px;
+    }
+    #slice-ctrl {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-bottom: 6px;
+    }
+    #slice-ctrl label { font-size: 0.79rem; color: #8b949e; white-space: nowrap; }
+    #qz-display {
+      font-size: 0.85rem;
+      font-family: monospace;
+      color: #79c0ff;
+      white-space: nowrap;
+      min-width: 68px;
+    }
+    #slice-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 6px;
+    }
+    #btn-slice-view {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+    }
+    #slice-plot { flex: 1; min-height: 0; }
+
+    /* ── Controls bar ── */
+    #controls {
+      background: #161b22;
+      border-top: 1px solid #21262d;
+      padding: 14px 28px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ctrl-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    button {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: #30363d; }
+    button:active { background: #3c444d; }
+    button.active {
+      background: #1f6feb;
+      border-color: #388bfd;
+      color: #fff;
+    }
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .btn-icon { font-size: 1rem; padding: 6px 10px; }
+
+    #slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 200px;
+    }
+    #slider-wrap label { font-size: 0.80rem; color: #8b949e; white-space: nowrap; }
+
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      background: #21262d;
+      height: 4px;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #388bfd;
+      cursor: pointer;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #388bfd;
+      border: none;
+      cursor: pointer;
+    }
+
+    #eta-display {
+      font-size: 0.90rem;
+      font-family: monospace;
+      color: #79c0ff;
+      white-space: nowrap;
+      min-width: 90px;
+    }
+
+    #params-box {
+      font-size: 0.76rem;
+      color: #8b949e;
+      border-left: 1px solid #30363d;
+      padding-left: 12px;
+      line-height: 1.8;
+    }
+    #params-box span { color: #58a6ff; }
+
+    .sep { width: 1px; height: 28px; background: #30363d; margin: 0 2px; }
+
+    /* KaTeX dark-theme overrides */
+    .katex { color: #c9d1d9; font-size: 1em; }
+    .katex-display { margin: 3px 0; overflow-x: auto; }
+    #eq-box .katex { font-size: 0.95em; }
+
+    /* ── Mobile: strip non-essential chrome to maximise plot area ── */
+    @media (max-width: 768px) {
+      header { padding: 8px 14px 6px; }
+      header h1 { font-size: 0.95rem; }
+      header p.subtitle { display: none; }
+      #eq-box { display: none; }
+      #plot-container { padding: 0 6px; }
+      #controls { padding: 8px 12px 10px; gap: 8px; }
+      #params-box { display: none; }
+      .sep { display: none; }
+      input[type="range"]::-webkit-slider-thumb { width: 20px; height: 20px; }
+      input[type="range"]::-moz-range-thumb    { width: 20px; height: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Cold-Limit Distribution — $n(\mathbf{q},\eta)$ &nbsp;($\bar\sigma\to 0$)</h1>
+  <p class="subtitle">
+    Phase-space distribution $f$ from Eq. (6.4), cold initial conditions — momentum-kick term drops out; integrated over $\mathbf{p}$
+  </p>
+</header>
+
+<div id="eq-box">
+  <strong>Eq. (6.4), $\bar\sigma\to 0$:</strong>
+  &nbsp;
+  $n(\mathbf{q},\eta)
+    = \bar\rho\!\left(1+\delta^{(i)}(\mathbf{q})\right)
+    + \bar\rho\,\nabla_{\!\mathbf{q}}\delta^{(i)}\cdot
+      \Bigl[C_1(\eta)\,H^{(1)}_{\rm ini} + D_1(\eta)\,F_{\rm ini}\Bigr]$
+  &nbsp;|&nbsp;
+  $C_1(\eta) = \tfrac{4}{m}\!\left[\tfrac{1}{9}e^{3\eta} - \tfrac{16}{9}e^{3\eta/2}
+    - \tfrac{3}{10}e^{2\eta} + \tfrac{1}{6} + \tfrac{2}{15}e^{-\eta/2}
+    + \tfrac{11}{3}e^{\eta} - 2e^{\eta/2}\right]$
+  &nbsp;|&nbsp;
+  $D_1(\eta) = \tfrac{4}{m}\!\left[\tfrac{2}{3}e^{\eta} - 2 + \tfrac{4}{3}e^{-\eta/2}\right]$
+</div>
+
+<div id="view-container">
+  <div id="plot-container">
+    <div id="plot"></div>
+  </div>
+
+  <!-- Slice panel: visible only in 3D volume mode -->
+  <div id="slice-panel">
+    <div id="slice-header">
+      <span class="slice-title">$q_z$ Slice</span>
+    </div>
+    <div id="slice-ctrl">
+      <label>$q_z =$</label>
+      <input type="range" id="qz-slider" min="0" max="39" value="20" style="flex:1; min-width:80px;">
+      <span id="qz-display">0.000</span>
+    </div>
+    <div id="slice-plot"></div>
+  </div>
+</div>
+
+<div id="controls">
+  <!-- Playback -->
+  <div class="ctrl-group">
+    <button class="btn-icon" id="btn-begin" title="Go to start">⏮</button>
+    <button class="btn-icon" id="btn-back"  title="Step back">◀</button>
+    <button id="btn-play"  title="Play">▶ Play</button>
+    <button id="btn-pause" title="Pause" disabled>⏸ Pause</button>
+    <button class="btn-icon" id="btn-fwd"   title="Step forward">▶</button>
+    <button class="btn-icon" id="btn-end"   title="Go to end">⏭</button>
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- η Slider -->
+  <div id="slider-wrap">
+    <label>$\eta =$</label>
+    <input type="range" id="slider" min="0" max="300" value="0" step="1">
+    <span id="eta-display">η = 0.000</span>
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- View toggle: cycles heatmap → surface → volume → heatmap -->
+  <button id="btn-toggle">🌐 3D Surface</button>
+
+  <!-- Slice view toggle: shown only in volume mode -->
+  <button id="btn-slice-view" style="display:none">📈 3D Surface</button>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────
+// PARAMETERS  (cold limit: σ̄ → 0; no velocity dispersion)
+// ─────────────────────────────────────────────────────────
+const RHO   = 1.0;   // ρ̄  mean density
+const M     = 1.0;   // m   particle mass
+const D0    = 0.10;  // δ₀  perturbation amplitude
+const AF    = 1.0;   // A_F initial force scale
+const K     = 1.0;   // k   wavenumber
+const L     = 2 * Math.PI;   // half-domain → domain [-L, L]
+const N     = 100;            // 2D grid points per axis
+const N3D   = 40;             // 3D grid points per axis (40³ = 64 000 pts)
+const ETA_MAX   = 3.0;
+const ETA_STEPS = 300;
+
+// ─────────────────────────────────────────────────────────
+// 2D GRID
+// ─────────────────────────────────────────────────────────
+const qvals = Array.from({ length: N }, (_, i) => -L + 2*L*i/(N-1));
+
+// ─────────────────────────────────────────────────────────
+// 2D PRECOMPUTE (time-independent)
+//   n(qx,qy,η) = n0[j][i] + C1(η)·A_C1[j][i] + D1(η)·A_D1[j][i]
+//
+// From Eq. (6.4), σ̄ → 0 cold limit:
+//   n = ρ̄(1 + δ_ini) + ρ̄ ∇δ_ini · [C1(η) H_ini^(1) + D1(η) F_ini]
+//
+//   δ_ini = δ₀ cos(kqx)cos(kqy)
+//   ψ_ini = δ₀/(2k²) cos(kqx)cos(kqy)   [∇²ψ_ini = −δ_ini]
+//   H_ini: Hessian of ψ_ini
+//     H11 = H22 = −(δ₀/2) cos(kqx)cos(kqy)
+//     H12 = H21 =  (δ₀/2) sin(kqx)sin(kqy)
+//   F_ini = A_F · ∇δ_ini
+// ─────────────────────────────────────────────────────────
+const n0   = [];
+const A_C1 = [];
+const A_D1 = [];
+
+for (let j = 0; j < N; j++) {
+  n0[j]   = new Float64Array(N);
+  A_C1[j] = new Float64Array(N);
+  A_D1[j] = new Float64Array(N);
+
+  for (let i = 0; i < N; i++) {
+    const qx = qvals[i], qy = qvals[j];
+    const cx = Math.cos(K*qx), sx = Math.sin(K*qx);
+    const cy = Math.cos(K*qy), sy = Math.sin(K*qy);
+
+    const di  = D0 * cx * cy;
+    const gdx = -D0*K * sx * cy;
+    const gdy = -D0*K * cx * sy;
+
+    // H_ini: 2×2 Hessian of ψ_ini = δ₀/(2k²)·cos·cos
+    const H11 = -(D0/2) * cx * cy;   // = H22
+    const H12 =  (D0/2) * sx * sy;
+
+    const Fx = AF * gdx, Fy = AF * gdy;
+
+    // H_ini · F_ini  (matrix-vector product)
+    const HFx = H11*Fx + H12*Fy;
+    const HFy = H12*Fx + H11*Fy;   // H22 = H11
+
+    n0[j][i]   = RHO * (1.0 + di);
+    A_C1[j][i] = RHO * (gdx*HFx + gdy*HFy);   // ∇δ_ini · (H_ini · F_ini)
+    A_D1[j][i] = RHO * (gdx*Fx  + gdy*Fy);    // ∇δ_ini · F_ini
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// 3D GRID
+// ─────────────────────────────────────────────────────────
+const SIZE3D  = N3D * N3D * N3D;
+const qvals3d = Array.from({ length: N3D }, (_, i) => -L + 2*L*i/(N3D-1));
+
+// ─────────────────────────────────────────────────────────
+// 3D PRECOMPUTE (time-independent, flat arrays)
+//   n(qx,qy,qz,η) = n0_3d[idx] + C1(η)·A_C1_3d[idx] + D1(η)·A_D1_3d[idx]
+//
+// IMPORTANT: Plotly volume trace requires x-slowest, y-middle, z-fastest ordering.
+//   index: i*N3D²+j*N3D+ki  (i=x outer, j=y middle, ki=z inner/fastest)
+//
+// 3D formulas (σ̄ → 0 cold limit, Eq. 6.4):
+//   δ_ini  = δ₀ cos(kqx)cos(kqy)cos(kqz)
+//   ψ_ini  = δ₀/(3k²) cos(kqx)cos(kqy)cos(kqz)
+//   H_ini (3×3 Hessian of ψ_ini):
+//     diagonal H11=H22=H33 = −(δ₀/3)cos·cos·cos
+//     H12 = (δ₀/3)sin(kqx)sin(kqy)cos(kqz)
+//     H13 = (δ₀/3)sin(kqx)cos(kqy)sin(kqz)
+//     H23 = (δ₀/3)cos(kqx)sin(kqy)sin(kqz)
+// ─────────────────────────────────────────────────────────
+const n0_3d    = new Float64Array(SIZE3D);
+const A_C1_3d  = new Float64Array(SIZE3D);
+const A_D1_3d  = new Float64Array(SIZE3D);
+// Float32Array: WebGL (used by Plotly volume) is 32-bit; avoids per-frame conversion overhead
+const vol_x    = new Float32Array(SIZE3D);
+const vol_y    = new Float32Array(SIZE3D);
+const vol_z    = new Float32Array(SIZE3D);
+
+for (let i = 0; i < N3D; i++) {          // x: outermost (slowest)
+  for (let j = 0; j < N3D; j++) {        // y: middle
+    for (let ki = 0; ki < N3D; ki++) {   // z: innermost (fastest) — required by Plotly
+      const idx = i * N3D * N3D + j * N3D + ki;
+      const qx = qvals3d[i], qy = qvals3d[j], qzv = qvals3d[ki];
+
+      vol_x[idx] = qx;
+      vol_y[idx] = qy;
+      vol_z[idx] = qzv;
+
+      const cx = Math.cos(K*qx), sx = Math.sin(K*qx);
+      const cy = Math.cos(K*qy), sy = Math.sin(K*qy);
+      const cz = Math.cos(K*qzv), sz = Math.sin(K*qzv);
+
+      const di  = D0 * cx * cy * cz;
+      const gdx = -D0*K * sx * cy * cz;
+      const gdy = -D0*K * cx * sy * cz;
+      const gdz = -D0*K * cx * cy * sz;
+
+      // H_ini: 3×3 Hessian of ψ_ini = δ₀/(3k²)·cos·cos·cos
+      const Hd  = -(D0/3) * cx * cy * cz;   // diagonal H11 = H22 = H33
+      const H12 =  (D0/3) * sx * sy * cz;
+      const H13 =  (D0/3) * sx * cy * sz;
+      const H23 =  (D0/3) * cx * sy * sz;
+
+      const Fx = AF * gdx, Fy = AF * gdy, Fz = AF * gdz;
+
+      // H_ini · F_ini  (3×3 symmetric matrix-vector product)
+      const HFx = Hd*Fx  + H12*Fy + H13*Fz;
+      const HFy = H12*Fx + Hd*Fy  + H23*Fz;
+      const HFz = H13*Fx + H23*Fy + Hd*Fz;
+
+      n0_3d[idx]   = RHO * (1.0 + di);
+      A_C1_3d[idx] = RHO * (gdx*HFx + gdy*HFy + gdz*HFz);   // ∇δ_ini · (H_ini · F_ini)
+      A_D1_3d[idx] = RHO * (gdx*Fx  + gdy*Fy  + gdz*Fz);    // ∇δ_ini · F_ini
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// TIME COEFFICIENT FUNCTIONS  (identical in 2D and 3D)
+//
+// From Eq. (6.4), σ̄ → 0 cold limit. The third term of Eq. (6.3)
+// (the momentum-kick / δp correction) vanishes entirely in this limit.
+// Only the position-displacement correction survives, giving:
+//
+// C₁(η) = (4/m)[1/9 e³η − 16/9 e^(3η/2) − 3/10 e²η + 1/6 + 2/15 e^(−η/2) + 11/3 eη − 2 e^(η/2)]
+// D₁(η) = (4/m)[2/3 eη − 2 + 4/3 e^(−η/2)]
+//
+// Both vanish at η = 0 (no perturbation growth at initial time).
+// ─────────────────────────────────────────────────────────
+function C1(eta) {
+  const e3  = Math.exp(3*eta);
+  const e32 = Math.exp(1.5*eta);
+  const e2  = Math.exp(2*eta);
+  const e1  = Math.exp(eta);
+  const e12 = Math.exp(0.5*eta);
+  const em  = Math.exp(-0.5*eta);
+  return (4/M) * (
+    (1/9)*e3  - (16/9)*e32 - (3/10)*e2 +
+    (1/6)     + (2/15)*em  + (11/3)*e1 - 2*e12
+  );
+}
+
+function D1(eta) {
+  return (4/M) * ((2/3)*Math.exp(eta) - 2 + (4/3)*Math.exp(-0.5*eta));
+}
+
+// ─────────────────────────────────────────────────────────
+// COMPUTE FUNCTIONS
+// ─────────────────────────────────────────────────────────
+// Pre-allocated output buffer for 2D frames — avoids per-frame heap churn during animation
+const nBuf2D = Array.from({ length: N }, () => new Float64Array(N));
+
+function computeN(eta) {
+  const c1 = C1(eta), d1 = D1(eta);
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      nBuf2D[j][i] = n0[j][i] + c1*A_C1[j][i] + d1*A_D1[j][i];
+    }
+  }
+  return nBuf2D;
+}
+
+// Pre-allocated output buffers for 3D frames — avoids per-frame heap churn during animation
+const nBuf3D    = new Float32Array(SIZE3D);
+const sliceBuf  = Array.from({ length: N3D }, () => new Float64Array(N3D));
+
+function computeN3D(eta) {
+  const c1 = C1(eta), d1 = D1(eta);
+  for (let i = 0; i < SIZE3D; i++) {
+    nBuf3D[i] = n0_3d[i] + c1*A_C1_3d[i] + d1*A_D1_3d[i];
+  }
+  return nBuf3D;
+}
+
+// Returns 2D array z[j][i] for the qz = qvals3d[kIdx] slice
+// With index layout (i*N3D²+j*N3D+ki), fixed ki=kIdx gives idx = i*N3D²+j*N3D+kIdx
+function computeSlice2D(eta, kIdx) {
+  const c1 = C1(eta), d1 = D1(eta);
+  for (let j = 0; j < N3D; j++) {
+    for (let i = 0; i < N3D; i++) {
+      const idx = i * N3D * N3D + j * N3D + kIdx;
+      sliceBuf[j][i] = n0_3d[idx] + c1*A_C1_3d[idx] + d1*A_D1_3d[idx];
+    }
+  }
+  return sliceBuf;
+}
+
+// ─────────────────────────────────────────────────────────
+// TRACE FACTORIES
+// ─────────────────────────────────────────────────────────
+const PLOTLY_COMMON = {
+  colorscale: 'Plasma',
+  showscale:  true,
+  colorbar: { title: { text: 'n(q,η)', side: 'right' }, thickness: 14 }
+};
+
+function heatmapTrace(z) {
+  return Object.assign({}, PLOTLY_COMMON, {
+    type: 'heatmap',
+    z, x: qvals, y: qvals,
+  });
+}
+
+function surfaceTrace(z) {
+  return Object.assign({}, PLOTLY_COMMON, {
+    type: 'surface',
+    z, x: qvals, y: qvals,
+    contours: {
+      z: { show: true, usecolormap: true, highlightcolor: '#42f462', project: { z: true } }
+    }
+  });
+}
+
+// Preconvert coordinate typed arrays to plain JS arrays once (Plotly volume needs this)
+const VOL_X = Array.from(vol_x);
+const VOL_Y = Array.from(vol_y);
+const VOL_Z = Array.from(vol_z);
+
+function volumeTrace(value, qzv) {
+  let vmin = value[0], vmax = value[0];
+  for (let i = 1; i < value.length; i++) {
+    if (value[i] < vmin) vmin = value[i];
+    if (value[i] > vmax) vmax = value[i];
+  }
+  const range = vmax - vmin;
+  return {
+    type: 'volume',
+    x: VOL_X, y: VOL_Y, z: VOL_Z,
+    value: Array.from(value),
+    isomin: vmin + 0.1 * range,
+    isomax: vmin + 0.9 * range,
+    opacity: 0.1,
+    surface_count: 25,
+    colorscale: 'Plasma',
+    showscale: true,
+    colorbar: { title: { text: 'n(q,η)', side: 'right' }, thickness: 14 },
+    slices: { z: { show: true, locations: [qzv] } },
+  };
+}
+
+// ─────────────────────────────────────────────────────────
+// LAYOUTS
+// ─────────────────────────────────────────────────────────
+const heatmapLayout = {
+  paper_bgcolor: '#0d1117',
+  plot_bgcolor:  '#0d1117',
+  font: { color: '#8b949e', size: 11 },
+  title: { text: 'n(q, η)  at  η = 0.000', font: { color: '#c9d1d9', size: 14 } },
+  xaxis: { title: { text: 'q<sub>x</sub>', font: { color: '#c9d1d9' } },
+           scaleanchor: 'y', scaleratio: 1,
+           gridcolor: '#21262d', zerolinecolor: '#30363d', color: '#8b949e' },
+  yaxis: { title: { text: 'q<sub>y</sub>', font: { color: '#c9d1d9' } },
+           gridcolor: '#21262d', zerolinecolor: '#30363d', color: '#8b949e' },
+  margin: { t: 50, l: 65, r: 20, b: 55 },
+};
+
+const surfaceLayout = {
+  paper_bgcolor: '#0d1117',
+  font: { color: '#8b949e', size: 11 },
+  title: { text: 'n(q, η)  at  η = 0.000', font: { color: '#c9d1d9', size: 14 } },
+  uirevision: 'constant',
+  scene: {
+    bgcolor: '#0d1117',
+    camera: { eye: { x: 1.4, y: 1.4, z: 0.92 } },
+    xaxis: { title: 'q<sub>x</sub>', color: '#8b949e', gridcolor: '#21262d' },
+    yaxis: { title: 'q<sub>y</sub>', color: '#8b949e', gridcolor: '#21262d' },
+    zaxis: { title: 'n',            color: '#8b949e', gridcolor: '#21262d' },
+  },
+  margin: { t: 50, l: 10, r: 10, b: 10 },
+};
+
+const volumeLayout = {
+  paper_bgcolor: '#0d1117',
+  font: { color: '#8b949e', size: 11 },
+  title: { text: 'n(q, η)  at  η = 0.000', font: { color: '#c9d1d9', size: 14 } },
+  uirevision: 'constant',
+  scene: {
+    bgcolor: '#0d1117',
+    camera: { eye: { x: 1.4, y: 1.4, z: 0.92 } },
+    xaxis: { title: 'q<sub>x</sub>', color: '#8b949e', gridcolor: '#21262d' },
+    yaxis: { title: 'q<sub>y</sub>', color: '#8b949e', gridcolor: '#21262d' },
+    zaxis: { title: 'q<sub>z</sub>', color: '#8b949e', gridcolor: '#21262d' },
+  },
+  margin: { t: 50, l: 10, r: 10, b: 10 },
+};
+
+const sliceLayout = {
+  paper_bgcolor: '#0d1117',
+  plot_bgcolor:  '#0d1117',
+  font: { color: '#8b949e', size: 10 },
+  title: { text: '', font: { color: '#c9d1d9', size: 11 } },
+  xaxis: {
+    title: { text: 'q<sub>x</sub>', font: { color: '#c9d1d9' } },
+    scaleanchor: 'y', scaleratio: 1,
+    gridcolor: '#21262d', zerolinecolor: '#30363d', color: '#8b949e',
+  },
+  yaxis: {
+    title: { text: 'q<sub>y</sub>', font: { color: '#c9d1d9' } },
+    gridcolor: '#21262d', zerolinecolor: '#30363d', color: '#8b949e',
+  },
+  margin: { t: 36, l: 50, r: 10, b: 45 },
+};
+
+const sliceSurfaceLayout = {
+  paper_bgcolor: '#0d1117',
+  font: { color: '#8b949e', size: 10 },
+  title: { text: '', font: { color: '#c9d1d9', size: 11 } },
+  uirevision: 'slice-surface',
+  scene: {
+    bgcolor: '#0d1117',
+    xaxis: { title: 'q<sub>x</sub>', color: '#8b949e', gridcolor: '#21262d' },
+    yaxis: { title: 'q<sub>y</sub>', color: '#8b949e', gridcolor: '#21262d' },
+    zaxis: { title: 'n',            color: '#8b949e', gridcolor: '#21262d' },
+    uirevision: 'slice-surface',
+  },
+  margin: { t: 36, l: 10, r: 10, b: 10 },
+};
+
+// ─────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────
+let viewMode      = 'heatmap';   // 'heatmap' | 'surface' | 'volume'
+let sliceViewMode = 'heatmap';   // 'heatmap' | 'surface3d'  (right panel)
+let isPlaying     = false;
+let currentStep   = 0;
+let playTimer     = null;
+let kSliceIdx     = Math.floor(N3D / 2);   // initial z-slice at centre
+let currentVolValue = null;                 // cached 3D value array for qz-slider reuse
+
+// ─────────────────────────────────────────────────────────
+// INITIAL RENDER
+// ─────────────────────────────────────────────────────────
+Plotly.newPlot('plot', [heatmapTrace(computeN(0))], heatmapLayout, { responsive: true });
+
+// ─────────────────────────────────────────────────────────
+// SLICE PANEL HELPERS
+// ─────────────────────────────────────────────────────────
+function updateSliceDisplay(eta) {
+  const qzv = qvals3d[kSliceIdx];
+  document.getElementById('qz-display').textContent = qzv.toFixed(3);
+
+  const z = computeSlice2D(eta, kSliceIdx);
+  const titleText = 'q<sub>z</sub> = ' + qzv.toFixed(3);
+
+  if (sliceViewMode === 'heatmap') {
+    const trace = {
+      type: 'heatmap',
+      z, x: qvals3d, y: qvals3d,
+      colorscale: 'Plasma',
+      showscale: true,
+      colorbar: { title: { text: 'n', side: 'right' }, thickness: 10 },
+    };
+    const layout = Object.assign({}, sliceLayout, {
+      title: { text: titleText, font: { color: '#c9d1d9', size: 11 } },
+    });
+    Plotly.react('slice-plot', [trace], layout, { responsive: true });
+  } else {
+    const trace = {
+      type: 'surface',
+      z, x: qvals3d, y: qvals3d,
+      colorscale: 'Plasma',
+      showscale: true,
+      colorbar: { title: { text: 'n', side: 'right' }, thickness: 10 },
+    };
+    let zmin = Infinity, zmax = -Infinity;
+    for (const row of z) {
+      for (const v of row) {
+        if (v < zmin) zmin = v;
+        if (v > zmax) zmax = v;
+      }
+    }
+    const span = zmax - zmin;
+    const zpad = span > 0 ? 0.15 * span : Math.abs(zmax) * 0.1 + 0.01;
+    const layout = JSON.parse(JSON.stringify(sliceSurfaceLayout));
+    layout.title.text = titleText;
+    layout.scene.zaxis = Object.assign({}, layout.scene.zaxis, { range: [zmin, zmax + zpad] });
+    Plotly.react('slice-plot', [trace], layout, { responsive: true });
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// UPDATE PLOT
+// ─────────────────────────────────────────────────────────
+function updatePlot(step) {
+  currentStep = Math.max(0, Math.min(ETA_STEPS, step));
+  document.getElementById('slider').value = currentStep;
+
+  const eta       = (currentStep / ETA_STEPS) * ETA_MAX;
+  const titleText = 'n(q, η)  at  η = ' + eta.toFixed(3);
+  document.getElementById('eta-display').textContent = 'η = ' + eta.toFixed(3);
+
+  if (viewMode === 'heatmap' || viewMode === 'surface') {
+    Plotly.restyle('plot', { z: [computeN(eta)] }, [0]);
+    Plotly.relayout('plot', { 'title.text': titleText });
+  } else {
+    currentVolValue = computeN3D(eta);
+    const layout = JSON.parse(JSON.stringify(volumeLayout));
+    layout.title.text = titleText;
+    Plotly.react('plot', [volumeTrace(currentVolValue, qvals3d[kSliceIdx])], layout, { responsive: true });
+    updateSliceDisplay(eta);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// PLAYBACK CONTROLS
+// ─────────────────────────────────────────────────────────
+document.getElementById('slider').addEventListener('input', function () {
+  stopPlay();
+  updatePlot(parseInt(this.value));
+});
+
+document.getElementById('qz-slider').addEventListener('input', function () {
+  kSliceIdx = parseInt(this.value);
+  const eta = (currentStep / ETA_STEPS) * ETA_MAX;
+
+  if (viewMode === 'volume' && currentVolValue) {
+    const layout = JSON.parse(JSON.stringify(volumeLayout));
+    layout.title.text = 'n(q, η)  at  η = ' + eta.toFixed(3);
+    Plotly.react('plot', [volumeTrace(currentVolValue, qvals3d[kSliceIdx])], layout, { responsive: true });
+  }
+  updateSliceDisplay(eta);
+});
+
+document.getElementById('btn-slice-view').addEventListener('click', function () {
+  sliceViewMode = sliceViewMode === 'heatmap' ? 'surface3d' : 'heatmap';
+  this.textContent = sliceViewMode === 'heatmap' ? '📈 3D Surface' : '🗺️ 2D Heatmap';
+  const eta = (currentStep / ETA_STEPS) * ETA_MAX;
+  updateSliceDisplay(eta);
+});
+
+function startPlay() {
+  if (isPlaying) return;
+  isPlaying = true;
+  document.getElementById('btn-play').disabled  = true;
+  document.getElementById('btn-pause').disabled = false;
+
+  const interval = viewMode === 'volume' ? 150 : 40;
+  playTimer = setInterval(() => {
+    if (currentStep >= ETA_STEPS) { stopPlay(); return; }
+    updatePlot(currentStep + 1);
+  }, interval);
+}
+
+function stopPlay() {
+  isPlaying = false;
+  clearInterval(playTimer);
+  document.getElementById('btn-play').disabled  = false;
+  document.getElementById('btn-pause').disabled = true;
+}
+
+document.getElementById('btn-play').addEventListener('click', startPlay);
+document.getElementById('btn-pause').addEventListener('click', stopPlay);
+document.getElementById('btn-begin').addEventListener('click', () => { stopPlay(); updatePlot(0); });
+document.getElementById('btn-end').addEventListener('click',   () => { stopPlay(); updatePlot(ETA_STEPS); });
+document.getElementById('btn-back').addEventListener('click',  () => { stopPlay(); updatePlot(currentStep - 10); });
+document.getElementById('btn-fwd').addEventListener('click',   () => { stopPlay(); updatePlot(currentStep + 10); });
+
+// ─────────────────────────────────────────────────────────
+// VIEW TOGGLE  heatmap → surface → volume → heatmap
+// ─────────────────────────────────────────────────────────
+document.getElementById('btn-toggle').addEventListener('click', function () {
+  stopPlay();
+  const eta       = (currentStep / ETA_STEPS) * ETA_MAX;
+  const titleText = 'n(q, η)  at  η = ' + eta.toFixed(3);
+
+  if (viewMode === 'heatmap') {
+    viewMode = 'surface';
+    this.textContent = '🔬 3D Volume';
+    const layout = JSON.parse(JSON.stringify(surfaceLayout));
+    layout.title.text = titleText;
+    Plotly.react('plot', [surfaceTrace(computeN(eta))], layout, { responsive: true });
+
+  } else if (viewMode === 'surface') {
+    viewMode = 'volume';
+    this.textContent = '🗺️ 2D Heatmap';
+    const value  = computeN3D(eta);
+    const layout = JSON.parse(JSON.stringify(volumeLayout));
+    layout.title.text = titleText;
+    currentVolValue = value;
+    Plotly.react('plot', [volumeTrace(value, qvals3d[kSliceIdx])], layout, { responsive: true });
+    document.getElementById('slice-panel').classList.add('active');
+    document.getElementById('btn-slice-view').style.display = '';
+    updateSliceDisplay(eta);
+
+  } else {   // volume → heatmap
+    viewMode = 'heatmap';
+    this.textContent = '🌐 3D Surface';
+    document.getElementById('slice-panel').classList.remove('active');
+    document.getElementById('btn-slice-view').style.display = 'none';
+    const layout = JSON.parse(JSON.stringify(heatmapLayout));
+    layout.title.text = titleText;
+    Plotly.react('plot', [heatmapTrace(computeN(eta))], layout, { responsive: true });
+  }
+});
+</script>
+</body>
+</html>
