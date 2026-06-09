@@ -810,7 +810,7 @@ function updateSliceDisplay(eta) {
     const layout = Object.assign({}, sliceLayout, {
       title: { text: titleText, font: { color: '#c9d1d9', size: 11 } },
     });
-    Plotly.newPlot('slice-plot', [trace], layout, { responsive: true });
+    Plotly.react('slice-plot', [trace], layout, { responsive: true });
   } else {
     const trace = {
       type: 'surface',
@@ -828,7 +828,7 @@ function updateSliceDisplay(eta) {
       autorange: false,
       range: [GLOBAL_RANGE_3D.vmin, GLOBAL_RANGE_3D.vmax],
     });
-    Plotly.newPlot('slice-plot', [trace], layout, { responsive: true });
+    Plotly.react('slice-plot', [trace], layout, { responsive: true });
   }
 }
 
