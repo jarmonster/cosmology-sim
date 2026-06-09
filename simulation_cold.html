@@ -240,13 +240,18 @@
   $n(\mathbf{q},\eta)
     = \bar\rho\!\left(1+\delta^{(i)}(\mathbf{q})\right)
     + \bar\rho\,\nabla_{\!\mathbf{q}}\delta^{(i)}\cdot
-      \Bigl[C_1(\eta)\,H^{(1)}_{\rm ini} + D_1(\eta)\,F_{\rm ini}\Bigr]$
+      \Bigl[(C_1{+}C_2)(\eta)\,H^{(1)}_{\rm ini} + (D_1{+}D_2)(\eta)\,F_{\rm ini}\Bigr]$
   &nbsp;|&nbsp;
-  $C_1(\eta) = \tfrac{4}{m}\!\left[\tfrac{1}{9}e^{3\eta} - \tfrac{16}{9}e^{3\eta/2}
-    - \tfrac{3}{10}e^{2\eta} + \tfrac{1}{6} + \tfrac{2}{15}e^{-\eta/2}
-    + \tfrac{11}{3}e^{\eta} - 2e^{\eta/2}\right]$
+  $\delta q\!:\;C_1(\eta) = \tfrac{4}{m}\!\left[\tfrac{1}{60}e^{4\eta} - \tfrac{143}{630}e^{3\eta}
+    - \tfrac{32}{45}e^{3\eta/2} + \tfrac{1}{6}e^{\eta} - \tfrac{2}{5}e^{\eta/2}
+    + \tfrac{13}{36} - \tfrac{2}{27}e^{-\eta/2}\right]$
   &nbsp;|&nbsp;
-  $D_1(\eta) = \tfrac{4}{m}\!\left[\tfrac{2}{3}e^{\eta} - 2 + \tfrac{4}{3}e^{-\eta/2}\right]$
+  $D_1(\eta) = \tfrac{4}{m}\!\left[\tfrac{1}{5}e^{2\eta} - 1 + \tfrac{4}{5}e^{-\eta/2}\right]$
+  &nbsp;|&nbsp;
+  $\delta p\!:\;C_2(\eta) = 2\!\left[-\tfrac{1}{35}e^{3\eta} + \tfrac{1}{3}e^{\eta}
+    - \tfrac{2}{5}e^{\eta/2} + \tfrac{2}{27}e^{-\eta/2}\right]$
+  &nbsp;|&nbsp;
+  $D_2(\eta) = \tfrac{2}{5}e^{2\eta} - \tfrac{2}{5}e^{-\eta/2}$
 </div>
 
 <div id="view-container">
@@ -295,6 +300,17 @@
 
   <!-- Slice view toggle: shown only in volume mode -->
   <button id="btn-slice-view" style="display:none">📈 3D Surface</button>
+
+  <div class="sep"></div>
+
+  <!-- Initial-condition preset selector -->
+  <label for="preset-select" style="font-size:0.79rem;color:#8b949e;">δ_ini:</label>
+  <select id="preset-select" style="background:#21262d;color:#c9d1d9;border:1px solid #30363d;border-radius:4px;padding:4px 8px;font-size:0.79rem;">
+    <option value="single">Single mode (k=1)</option>
+    <option value="double">Two modes (k=1,2)</option>
+    <option value="triple">Three modes (anisotropic)</option>
+    <option value="random">Random (5 modes)</option>
+  </select>
 </div>
 
 <script>
@@ -303,14 +319,77 @@
 // ─────────────────────────────────────────────────────────
 const RHO   = 1.0;   // ρ̄  mean density
 const M     = 1.0;   // m   particle mass
-const D0    = 0.10;  // δ₀  perturbation amplitude
+const D0    = 0.10;  // δ₀  perturbation amplitude (single-mode reference)
 const AF    = 1.0;   // A_F initial force scale
-const K     = 1.0;   // k   wavenumber
+const K     = 1.0;   // k   wavenumber (single-mode reference)
 const L     = 2 * Math.PI;   // half-domain → domain [-L, L]
+
+// Initial-density-contrast presets. Each preset is a list of Fourier modes
+//    δ_ini(q) = Σ amp_i · cos(kx_i · qx) · cos(ky_i · qy) [· cos(kz_i · qz) in 3D]
+// ψ_ini, ∇δ, H_ini, F_ini are summed linearly over modes.
+const MODE_PRESETS = {
+  single: {
+    label: 'Single mode  (k=1)',
+    modes: [{ amp: D0, kx: 1, ky: 1, kz: 1 }],
+  },
+  double: {
+    label: 'Two modes  (k=1,2)',
+    modes: [
+      { amp: D0 * 0.6, kx: 1, ky: 1, kz: 1 },
+      { amp: D0 * 0.4, kx: 2, ky: 2, kz: 2 },
+    ],
+  },
+  triple: {
+    label: 'Three modes  (k=1,2,3 anisotropic)',
+    modes: [
+      { amp: D0 * 0.5, kx: 1, ky: 1, kz: 1 },
+      { amp: D0 * 0.3, kx: 2, ky: 1, kz: 1 },
+      { amp: D0 * 0.2, kx: 1, ky: 3, kz: 2 },
+    ],
+  },
+  random: {
+    label: 'Random  (5 modes)',
+    modes: (() => {
+      const arr = [];
+      // Seeded-ish (Math.random ok — fixed per page load)
+      for (let n = 0; n < 5; n++) {
+        const kx = 1 + Math.floor(Math.random() * 3);
+        const ky = 1 + Math.floor(Math.random() * 3);
+        const kz = 1 + Math.floor(Math.random() * 3);
+        arr.push({ amp: (D0 / 4) * (0.5 + Math.random()), kx, ky, kz });
+      }
+      return arr;
+    })(),
+  },
+};
+let currentPreset = 'single';
 const N     = 100;            // 2D grid points per axis
 const N3D   = 40;             // 3D grid points per axis (40³ = 64 000 pts)
 const ETA_MAX   = 3.0;
 const ETA_STEPS = 300;
+
+// ─────────────────────────────────────────────────────────
+// GLOBAL COLOR / Z RANGE  (computed once from the final frame)
+// Locks both the colorscale and z-axis to a fixed absolute range so
+// neither wanders as η changes — same color = same density everywhere.
+// ─────────────────────────────────────────────────────────
+function computeGlobalRange() {
+  let vmin = Infinity, vmax = -Infinity;
+  const samples = 64;
+  for (let s = 0; s <= samples; s++) {
+    const eta = (s / samples) * ETA_MAX;
+    const c = C1(eta) + C2(eta);
+    const d = D1(eta) + D2(eta);
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const v = n0[j][i] + c*A_C1[j][i] + d*A_D1[j][i];
+        if (v < vmin) vmin = v;
+        if (v > vmax) vmax = v;
+      }
+    }
+  }
+  return { vmin, vmax };
+}
 
 // ─────────────────────────────────────────────────────────
 // 2D GRID
@@ -318,50 +397,49 @@ const ETA_STEPS = 300;
 const qvals = Array.from({ length: N }, (_, i) => -L + 2*L*i/(N-1));
 
 // ─────────────────────────────────────────────────────────
-// 2D PRECOMPUTE (time-independent)
-//   n(qx,qy,η) = n0[j][i] + C1(η)·A_C1[j][i] + D1(η)·A_D1[j][i]
+// 2D PRECOMPUTE (time-independent, multi-mode)
+//   n(qx,qy,η) = n0[j][i] + (C1+C2)(η)·A_C1[j][i] + (D1+D2)(η)·A_D1[j][i]
 //
-// From Eq. (6.4), σ̄ → 0 cold limit:
-//   n = ρ̄(1 + δ_ini) + ρ̄ ∇δ_ini · [C1(η) H_ini^(1) + D1(η) F_ini]
-//
-//   δ_ini = δ₀ cos(kqx)cos(kqy)
-//   ψ_ini = δ₀/(2k²) cos(kqx)cos(kqy)   [∇²ψ_ini = −δ_ini]
-//   H_ini: Hessian of ψ_ini
-//     H11 = H22 = −(δ₀/2) cos(kqx)cos(kqy)
-//     H12 = H21 =  (δ₀/2) sin(kqx)sin(kqy)
-//   F_ini = A_F · ∇δ_ini
+//   δ_ini = Σ_m amp_m cos(kx_m qx) cos(ky_m qy)
+//   ψ_ini = Σ_m [amp_m / (kx_m²+ky_m²)] cos(kx_m qx) cos(ky_m qy)
+//   ∂²ψ/∂qa∂qb computed per-mode then summed for H_ini.
+//   F_ini = A_F · ∇δ_ini.
 // ─────────────────────────────────────────────────────────
 const n0   = [];
 const A_C1 = [];
 const A_D1 = [];
-
 for (let j = 0; j < N; j++) {
   n0[j]   = new Float64Array(N);
   A_C1[j] = new Float64Array(N);
   A_D1[j] = new Float64Array(N);
+}
 
-  for (let i = 0; i < N; i++) {
-    const qx = qvals[i], qy = qvals[j];
-    const cx = Math.cos(K*qx), sx = Math.sin(K*qx);
-    const cy = Math.cos(K*qy), sy = Math.sin(K*qy);
-
-    const di  = D0 * cx * cy;
-    const gdx = -D0*K * sx * cy;
-    const gdy = -D0*K * cx * sy;
-
-    // H_ini: 2×2 Hessian of ψ_ini = δ₀/(2k²)·cos·cos
-    const H11 = -(D0/2) * cx * cy;   // = H22
-    const H12 =  (D0/2) * sx * sy;
-
-    const Fx = AF * gdx, Fy = AF * gdy;
-
-    // H_ini · F_ini  (matrix-vector product)
-    const HFx = H11*Fx + H12*Fy;
-    const HFy = H12*Fx + H11*Fy;   // H22 = H11
-
-    n0[j][i]   = RHO * (1.0 + di);
-    A_C1[j][i] = RHO * (gdx*HFx + gdy*HFy);   // ∇δ_ini · (H_ini · F_ini)
-    A_D1[j][i] = RHO * (gdx*Fx  + gdy*Fy);    // ∇δ_ini · F_ini
+function precompute2D(modes) {
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const qx = qvals[i], qy = qvals[j];
+      let di = 0, gdx = 0, gdy = 0;
+      let H11 = 0, H22 = 0, H12 = 0;
+      for (const m of modes) {
+        const cx = Math.cos(m.kx * qx), sx = Math.sin(m.kx * qx);
+        const cy = Math.cos(m.ky * qy), sy = Math.sin(m.ky * qy);
+        const cc = cx * cy;
+        di  += m.amp * cc;
+        gdx += -m.amp * m.kx * sx * cy;
+        gdy += -m.amp * m.ky * cx * sy;
+        const k2  = m.kx*m.kx + m.ky*m.ky;
+        const psi = (m.amp / k2) * cc;
+        H11 += -m.kx*m.kx * psi;
+        H22 += -m.ky*m.ky * psi;
+        H12 += (m.amp / k2) * m.kx * m.ky * sx * sy;
+      }
+      const Fx = AF * gdx, Fy = AF * gdy;
+      const HFx = H11*Fx + H12*Fy;
+      const HFy = H12*Fx + H22*Fy;
+      n0[j][i]   = RHO * (1.0 + di);
+      A_C1[j][i] = RHO * (gdx*HFx + gdy*HFy);
+      A_D1[j][i] = RHO * (gdx*Fx  + gdy*Fy);
+    }
   }
 }
 
@@ -372,64 +450,63 @@ const SIZE3D  = N3D * N3D * N3D;
 const qvals3d = Array.from({ length: N3D }, (_, i) => -L + 2*L*i/(N3D-1));
 
 // ─────────────────────────────────────────────────────────
-// 3D PRECOMPUTE (time-independent, flat arrays)
-//   n(qx,qy,qz,η) = n0_3d[idx] + C1(η)·A_C1_3d[idx] + D1(η)·A_D1_3d[idx]
-//
-// IMPORTANT: Plotly volume trace requires x-slowest, y-middle, z-fastest ordering.
-//   index: i*N3D²+j*N3D+ki  (i=x outer, j=y middle, ki=z inner/fastest)
-//
-// 3D formulas (σ̄ → 0 cold limit, Eq. 6.4):
-//   δ_ini  = δ₀ cos(kqx)cos(kqy)cos(kqz)
-//   ψ_ini  = δ₀/(3k²) cos(kqx)cos(kqy)cos(kqz)
-//   H_ini (3×3 Hessian of ψ_ini):
-//     diagonal H11=H22=H33 = −(δ₀/3)cos·cos·cos
-//     H12 = (δ₀/3)sin(kqx)sin(kqy)cos(kqz)
-//     H13 = (δ₀/3)sin(kqx)cos(kqy)sin(kqz)
-//     H23 = (δ₀/3)cos(kqx)sin(kqy)sin(kqz)
+// 3D PRECOMPUTE (time-independent, flat arrays, multi-mode)
+// IMPORTANT: Plotly volume trace requires x-slowest, y-middle, z-fastest order.
+// index: i*N3D²+j*N3D+ki
 // ─────────────────────────────────────────────────────────
 const n0_3d    = new Float64Array(SIZE3D);
 const A_C1_3d  = new Float64Array(SIZE3D);
 const A_D1_3d  = new Float64Array(SIZE3D);
-// Float32Array: WebGL (used by Plotly volume) is 32-bit; avoids per-frame conversion overhead
 const vol_x    = new Float32Array(SIZE3D);
 const vol_y    = new Float32Array(SIZE3D);
 const vol_z    = new Float32Array(SIZE3D);
 
-for (let i = 0; i < N3D; i++) {          // x: outermost (slowest)
-  for (let j = 0; j < N3D; j++) {        // y: middle
-    for (let ki = 0; ki < N3D; ki++) {   // z: innermost (fastest) — required by Plotly
+// Populate coordinates once — independent of modes.
+for (let i = 0; i < N3D; i++) {
+  for (let j = 0; j < N3D; j++) {
+    for (let ki = 0; ki < N3D; ki++) {
       const idx = i * N3D * N3D + j * N3D + ki;
-      const qx = qvals3d[i], qy = qvals3d[j], qzv = qvals3d[ki];
+      vol_x[idx] = qvals3d[i];
+      vol_y[idx] = qvals3d[j];
+      vol_z[idx] = qvals3d[ki];
+    }
+  }
+}
 
-      vol_x[idx] = qx;
-      vol_y[idx] = qy;
-      vol_z[idx] = qzv;
-
-      const cx = Math.cos(K*qx), sx = Math.sin(K*qx);
-      const cy = Math.cos(K*qy), sy = Math.sin(K*qy);
-      const cz = Math.cos(K*qzv), sz = Math.sin(K*qzv);
-
-      const di  = D0 * cx * cy * cz;
-      const gdx = -D0*K * sx * cy * cz;
-      const gdy = -D0*K * cx * sy * cz;
-      const gdz = -D0*K * cx * cy * sz;
-
-      // H_ini: 3×3 Hessian of ψ_ini = δ₀/(3k²)·cos·cos·cos
-      const Hd  = -(D0/3) * cx * cy * cz;   // diagonal H11 = H22 = H33
-      const H12 =  (D0/3) * sx * sy * cz;
-      const H13 =  (D0/3) * sx * cy * sz;
-      const H23 =  (D0/3) * cx * sy * sz;
-
-      const Fx = AF * gdx, Fy = AF * gdy, Fz = AF * gdz;
-
-      // H_ini · F_ini  (3×3 symmetric matrix-vector product)
-      const HFx = Hd*Fx  + H12*Fy + H13*Fz;
-      const HFy = H12*Fx + Hd*Fy  + H23*Fz;
-      const HFz = H13*Fx + H23*Fy + Hd*Fz;
-
-      n0_3d[idx]   = RHO * (1.0 + di);
-      A_C1_3d[idx] = RHO * (gdx*HFx + gdy*HFy + gdz*HFz);   // ∇δ_ini · (H_ini · F_ini)
-      A_D1_3d[idx] = RHO * (gdx*Fx  + gdy*Fy  + gdz*Fz);    // ∇δ_ini · F_ini
+function precompute3D(modes) {
+  for (let i = 0; i < N3D; i++) {
+    for (let j = 0; j < N3D; j++) {
+      for (let ki = 0; ki < N3D; ki++) {
+        const idx = i * N3D * N3D + j * N3D + ki;
+        const qx = qvals3d[i], qy = qvals3d[j], qzv = qvals3d[ki];
+        let di = 0, gdx = 0, gdy = 0, gdz = 0;
+        let H11 = 0, H22 = 0, H33 = 0, H12 = 0, H13 = 0, H23 = 0;
+        for (const m of modes) {
+          const cx = Math.cos(m.kx * qx),  sx = Math.sin(m.kx * qx);
+          const cy = Math.cos(m.ky * qy),  sy = Math.sin(m.ky * qy);
+          const cz = Math.cos(m.kz * qzv), sz = Math.sin(m.kz * qzv);
+          const ccc = cx * cy * cz;
+          di  += m.amp * ccc;
+          gdx += -m.amp * m.kx * sx * cy * cz;
+          gdy += -m.amp * m.ky * cx * sy * cz;
+          gdz += -m.amp * m.kz * cx * cy * sz;
+          const k2  = m.kx*m.kx + m.ky*m.ky + m.kz*m.kz;
+          const psi = (m.amp / k2) * ccc;
+          H11 += -m.kx*m.kx * psi;
+          H22 += -m.ky*m.ky * psi;
+          H33 += -m.kz*m.kz * psi;
+          H12 += (m.amp / k2) * m.kx * m.ky * sx * sy * cz;
+          H13 += (m.amp / k2) * m.kx * m.kz * sx * cy * sz;
+          H23 += (m.amp / k2) * m.ky * m.kz * cx * sy * sz;
+        }
+        const Fx = AF * gdx, Fy = AF * gdy, Fz = AF * gdz;
+        const HFx = H11*Fx + H12*Fy + H13*Fz;
+        const HFy = H12*Fx + H22*Fy + H23*Fz;
+        const HFz = H13*Fx + H23*Fy + H33*Fz;
+        n0_3d[idx]   = RHO * (1.0 + di);
+        A_C1_3d[idx] = RHO * (gdx*HFx + gdy*HFy + gdz*HFz);
+        A_D1_3d[idx] = RHO * (gdx*Fx  + gdy*Fy  + gdz*Fz);
+      }
     }
   }
 }
@@ -437,31 +514,74 @@ for (let i = 0; i < N3D; i++) {          // x: outermost (slowest)
 // ─────────────────────────────────────────────────────────
 // TIME COEFFICIENT FUNCTIONS  (identical in 2D and 3D)
 //
-// From Eq. (6.4), σ̄ → 0 cold limit. The third term of Eq. (6.3)
-// (the momentum-kick / δp correction) vanishes entirely in this limit.
-// Only the position-displacement correction survives, giving:
+// Updated derivation coefficients for both δq (position displacement) and
+// δp (momentum kick). Each has spatial structure
+//    δ = [H-coef(η)]·H_ini^(1)·F_ini + [I-coef(η)]·F_ini.
 //
-// C₁(η) = (4/m)[1/9 e³η − 16/9 e^(3η/2) − 3/10 e²η + 1/6 + 2/15 e^(−η/2) + 11/3 eη − 2 e^(η/2)]
-// D₁(η) = (4/m)[2/3 eη − 2 + 4/3 e^(−η/2)]
+// δq coefficients:
+//   C₁(η) = (4/m)[1/60 e^(4η) − 143/630 e^(3η) − 32/45 e^(3η/2)
+//                 + 1/6 e^η − 2/5 e^(η/2) + 13/36 − 2/27 e^(-η/2)]
+//   D₁(η) = (4/m)[1/5 e^(2η) − 1 + 4/5 e^(-η/2)]
 //
-// Both vanish at η = 0 (no perturbation growth at initial time).
+// δp coefficients:
+//   C₂(η) = 2[−1/35 e^(3η) + 1/3 e^η − 2/5 e^(η/2) + 2/27 e^(-η/2)]
+//   D₂(η) = 2/5 e^(2η) − 2/5 e^(-η/2)
+//
+// Combined (per user convention, both same dimension):
+//   n = n0 + (C₁+C₂)·A_C1 + (D₁+D₂)·A_D1.
 // ─────────────────────────────────────────────────────────
 function C1(eta) {
+  const e4  = Math.exp(4*eta);
   const e3  = Math.exp(3*eta);
   const e32 = Math.exp(1.5*eta);
-  const e2  = Math.exp(2*eta);
   const e1  = Math.exp(eta);
   const e12 = Math.exp(0.5*eta);
   const em  = Math.exp(-0.5*eta);
   return (4/M) * (
-    (1/9)*e3  - (16/9)*e32 - (3/10)*e2 +
-    (1/6)     + (2/15)*em  + (11/3)*e1 - 2*e12
+    (1/60)*e4 - (143/630)*e3 - (32/45)*e32 +
+    (1/6)*e1  - (2/5)*e12    + (13/36)    - (2/27)*em
   );
 }
 
 function D1(eta) {
-  return (4/M) * ((2/3)*Math.exp(eta) - 2 + (4/3)*Math.exp(-0.5*eta));
+  return (4/M) * ((1/5)*Math.exp(2*eta) - 1 + (4/5)*Math.exp(-0.5*eta));
 }
+
+function C2(eta) {
+  return 2 * (
+    -(1/35)*Math.exp(3*eta) + (1/3)*Math.exp(eta)
+    - (2/5)*Math.exp(0.5*eta) + (2/27)*Math.exp(-0.5*eta)
+  );
+}
+
+function D2(eta) {
+  return (2/5)*Math.exp(2*eta) - (2/5)*Math.exp(-0.5*eta);
+}
+
+// Populate precompute arrays with the default preset before computing ranges.
+precompute2D(MODE_PRESETS[currentPreset].modes);
+precompute3D(MODE_PRESETS[currentPreset].modes);
+
+// Mutable because preset switching re-derives them at runtime.
+let GLOBAL_RANGE = computeGlobalRange();
+
+// 3D global range — locked colorbar + zaxis for the slice panel (mirrors 2D treatment)
+function computeGlobalRange3D() {
+  let vmin = Infinity, vmax = -Infinity;
+  const samples = 64;
+  for (let s = 0; s <= samples; s++) {
+    const eta = (s / samples) * ETA_MAX;
+    const c = C1(eta) + C2(eta);
+    const d = D1(eta) + D2(eta);
+    for (let i = 0; i < SIZE3D; i++) {
+      const v = n0_3d[i] + c*A_C1_3d[i] + d*A_D1_3d[i];
+      if (v < vmin) vmin = v;
+      if (v > vmax) vmax = v;
+    }
+  }
+  return { vmin, vmax };
+}
+let GLOBAL_RANGE_3D = computeGlobalRange3D();
 
 // ─────────────────────────────────────────────────────────
 // COMPUTE FUNCTIONS
@@ -470,10 +590,11 @@ function D1(eta) {
 const nBuf2D = Array.from({ length: N }, () => new Float64Array(N));
 
 function computeN(eta) {
-  const c1 = C1(eta), d1 = D1(eta);
+  const c = C1(eta) + C2(eta);
+  const d = D1(eta) + D2(eta);
   for (let j = 0; j < N; j++) {
     for (let i = 0; i < N; i++) {
-      nBuf2D[j][i] = n0[j][i] + c1*A_C1[j][i] + d1*A_D1[j][i];
+      nBuf2D[j][i] = n0[j][i] + c*A_C1[j][i] + d*A_D1[j][i];
     }
   }
   return nBuf2D;
@@ -484,9 +605,10 @@ const nBuf3D    = new Float32Array(SIZE3D);
 const sliceBuf  = Array.from({ length: N3D }, () => new Float64Array(N3D));
 
 function computeN3D(eta) {
-  const c1 = C1(eta), d1 = D1(eta);
+  const c = C1(eta) + C2(eta);
+  const d = D1(eta) + D2(eta);
   for (let i = 0; i < SIZE3D; i++) {
-    nBuf3D[i] = n0_3d[i] + c1*A_C1_3d[i] + d1*A_D1_3d[i];
+    nBuf3D[i] = n0_3d[i] + c*A_C1_3d[i] + d*A_D1_3d[i];
   }
   return nBuf3D;
 }
@@ -494,11 +616,12 @@ function computeN3D(eta) {
 // Returns 2D array z[j][i] for the qz = qvals3d[kIdx] slice
 // With index layout (i*N3D²+j*N3D+ki), fixed ki=kIdx gives idx = i*N3D²+j*N3D+kIdx
 function computeSlice2D(eta, kIdx) {
-  const c1 = C1(eta), d1 = D1(eta);
+  const c = C1(eta) + C2(eta);
+  const d = D1(eta) + D2(eta);
   for (let j = 0; j < N3D; j++) {
     for (let i = 0; i < N3D; i++) {
       const idx = i * N3D * N3D + j * N3D + kIdx;
-      sliceBuf[j][i] = n0_3d[idx] + c1*A_C1_3d[idx] + d1*A_D1_3d[idx];
+      sliceBuf[j][i] = n0_3d[idx] + c*A_C1_3d[idx] + d*A_D1_3d[idx];
     }
   }
   return sliceBuf;
@@ -514,9 +637,15 @@ const PLOTLY_COMMON = {
 };
 
 function heatmapTrace(z) {
+  // Plotly heatmap honours zmin/zmax (not cmin/cmax) for the colour mapping
+  // AND the colorbar tick range. Using cmin/cmax leaves Plotly in implicit
+  // autoscale, so the colorbar visibly rescales every frame as max(n) grows.
   return Object.assign({}, PLOTLY_COMMON, {
     type: 'heatmap',
     z, x: qvals, y: qvals,
+    zauto: false,
+    zmin: GLOBAL_RANGE.vmin,
+    zmax: GLOBAL_RANGE.vmax,
   });
 }
 
@@ -524,6 +653,9 @@ function surfaceTrace(z) {
   return Object.assign({}, PLOTLY_COMMON, {
     type: 'surface',
     z, x: qvals, y: qvals,
+    cauto: false,
+    cmin: GLOBAL_RANGE.vmin,
+    cmax: GLOBAL_RANGE.vmax,
     contours: {
       z: { show: true, usecolormap: true, highlightcolor: '#42f462', project: { z: true } }
     }
@@ -536,18 +668,18 @@ const VOL_Y = Array.from(vol_y);
 const VOL_Z = Array.from(vol_z);
 
 function volumeTrace(value, qzv) {
-  let vmin = value[0], vmax = value[0];
-  for (let i = 1; i < value.length; i++) {
-    if (value[i] < vmin) vmin = value[i];
-    if (value[i] > vmax) vmax = value[i];
-  }
-  const range = vmax - vmin;
+  // Fixed isovalue range based on GLOBAL_RANGE_3D — keeps isosurface structure
+  // and colorbar steady across η scrubs (no per-frame autoscale "reset").
+  const vrange = GLOBAL_RANGE_3D.vmax - GLOBAL_RANGE_3D.vmin;
   return {
     type: 'volume',
     x: VOL_X, y: VOL_Y, z: VOL_Z,
     value: Array.from(value),
-    isomin: vmin + 0.1 * range,
-    isomax: vmin + 0.9 * range,
+    isomin: GLOBAL_RANGE_3D.vmin + 0.1 * vrange,
+    isomax: GLOBAL_RANGE_3D.vmin + 0.9 * vrange,
+    cauto: false,
+    cmin: GLOBAL_RANGE_3D.vmin,
+    cmax: GLOBAL_RANGE_3D.vmax,
     opacity: 0.1,
     surface_count: 25,
     colorscale: 'Plasma',
@@ -583,7 +715,9 @@ const surfaceLayout = {
     camera: { eye: { x: 1.4, y: 1.4, z: 0.92 } },
     xaxis: { title: 'q<sub>x</sub>', color: '#8b949e', gridcolor: '#21262d' },
     yaxis: { title: 'q<sub>y</sub>', color: '#8b949e', gridcolor: '#21262d' },
-    zaxis: { title: 'n',            color: '#8b949e', gridcolor: '#21262d' },
+    zaxis: { title: 'n', color: '#8b949e', gridcolor: '#21262d',
+             autorange: false,
+             range: [GLOBAL_RANGE.vmin, GLOBAL_RANGE.vmax] },
   },
   margin: { t: 50, l: 10, r: 10, b: 10 },
 };
@@ -667,33 +801,33 @@ function updateSliceDisplay(eta) {
       z, x: qvals3d, y: qvals3d,
       colorscale: 'Plasma',
       showscale: true,
+      zauto: false,
+      zmin: GLOBAL_RANGE_3D.vmin,
+      zmax: GLOBAL_RANGE_3D.vmax,
       colorbar: { title: { text: 'n', side: 'right' }, thickness: 10 },
     };
     const layout = Object.assign({}, sliceLayout, {
       title: { text: titleText, font: { color: '#c9d1d9', size: 11 } },
     });
-    Plotly.react('slice-plot', [trace], layout, { responsive: true });
+    Plotly.newPlot('slice-plot', [trace], layout, { responsive: true });
   } else {
     const trace = {
       type: 'surface',
       z, x: qvals3d, y: qvals3d,
       colorscale: 'Plasma',
       showscale: true,
+      cauto: false,
+      cmin: GLOBAL_RANGE_3D.vmin,
+      cmax: GLOBAL_RANGE_3D.vmax,
       colorbar: { title: { text: 'n', side: 'right' }, thickness: 10 },
     };
-    let zmin = Infinity, zmax = -Infinity;
-    for (const row of z) {
-      for (const v of row) {
-        if (v < zmin) zmin = v;
-        if (v > zmax) zmax = v;
-      }
-    }
-    const span = zmax - zmin;
-    const zpad = span > 0 ? 0.15 * span : Math.abs(zmax) * 0.1 + 0.01;
     const layout = JSON.parse(JSON.stringify(sliceSurfaceLayout));
     layout.title.text = titleText;
-    layout.scene.zaxis = Object.assign({}, layout.scene.zaxis, { range: [zmin, zmax + zpad] });
-    Plotly.react('slice-plot', [trace], layout, { responsive: true });
+    layout.scene.zaxis = Object.assign({}, layout.scene.zaxis, {
+      autorange: false,
+      range: [GLOBAL_RANGE_3D.vmin, GLOBAL_RANGE_3D.vmax],
+    });
+    Plotly.newPlot('slice-plot', [trace], layout, { responsive: true });
   }
 }
 
@@ -749,6 +883,7 @@ document.getElementById('btn-slice-view').addEventListener('click', function () 
 
 function startPlay() {
   if (isPlaying) return;
+  if (currentStep >= ETA_STEPS) updatePlot(0);
   isPlaying = true;
   document.getElementById('btn-play').disabled  = true;
   document.getElementById('btn-pause').disabled = false;
@@ -809,6 +944,42 @@ document.getElementById('btn-toggle').addEventListener('click', function () {
     const layout = JSON.parse(JSON.stringify(heatmapLayout));
     layout.title.text = titleText;
     Plotly.react('plot', [heatmapTrace(computeN(eta))], layout, { responsive: true });
+  }
+});
+
+// ─────────────────────────────────────────────────────────
+// INITIAL-CONDITION PRESET SELECTOR
+// Re-precomputes mode-dependent arrays + colour/height ranges + active view.
+// ─────────────────────────────────────────────────────────
+document.getElementById('preset-select').addEventListener('change', function () {
+  stopPlay();
+  currentPreset = this.value;
+  const modes = MODE_PRESETS[currentPreset].modes;
+
+  precompute2D(modes);
+  precompute3D(modes);
+  GLOBAL_RANGE    = computeGlobalRange();
+  GLOBAL_RANGE_3D = computeGlobalRange3D();
+  // Surface layout's zaxis range is baked at script init — refresh it.
+  surfaceLayout.scene.zaxis.range = [GLOBAL_RANGE.vmin, GLOBAL_RANGE.vmax];
+
+  const eta       = (currentStep / ETA_STEPS) * ETA_MAX;
+  const titleText = 'n(q, η)  at  η = ' + eta.toFixed(3);
+
+  if (viewMode === 'heatmap') {
+    const layout = JSON.parse(JSON.stringify(heatmapLayout));
+    layout.title.text = titleText;
+    Plotly.newPlot('plot', [heatmapTrace(computeN(eta))], layout, { responsive: true });
+  } else if (viewMode === 'surface') {
+    const layout = JSON.parse(JSON.stringify(surfaceLayout));
+    layout.title.text = titleText;
+    Plotly.newPlot('plot', [surfaceTrace(computeN(eta))], layout, { responsive: true });
+  } else {  // volume
+    currentVolValue = computeN3D(eta);
+    const layout = JSON.parse(JSON.stringify(volumeLayout));
+    layout.title.text = titleText;
+    Plotly.newPlot('plot', [volumeTrace(currentVolValue, qvals3d[kSliceIdx])], layout, { responsive: true });
+    updateSliceDisplay(eta);
   }
 });
 </script>
